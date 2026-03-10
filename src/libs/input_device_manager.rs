@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use std::ptr::null_mut;
 use std::ffi::OsString;
+use std::ptr::null_mut;
 
 #[cfg(windows)]
 use std::os::windows::ffi::OsStringExt;
@@ -8,17 +8,7 @@ use std::os::windows::ffi::OsStringExt;
 #[cfg(windows)]
 use winapi::shared::ntdef::HANDLE;
 #[cfg(windows)]
-use winapi::shared::minwindef::*;
-#[cfg(windows)]
 use winapi::um::winuser::*;
-#[cfg(windows)]
-use winapi::um::setupapi::*;
-#[cfg(windows)]
-use winapi::um::winreg::*;
-#[cfg(windows)]
-use winapi::shared::devguid::*;
-#[cfg(windows)]
-use winapi::um::cfgmgr32::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct InputDeviceInfo {
@@ -73,12 +63,11 @@ impl InputDeviceManager {
             let mut num_devices = 0u32;
 
             // First call to get the number of devices
-            if
-                GetRawInputDeviceList(
-                    null_mut(),
-                    &mut num_devices,
-                    std::mem::size_of::<RAWINPUTDEVICELIST>() as u32
-                ) == u32::MAX
+            if GetRawInputDeviceList(
+                null_mut(),
+                &mut num_devices,
+                std::mem::size_of::<RAWINPUTDEVICELIST>() as u32,
+            ) == u32::MAX
             {
                 return Err("Failed to get raw input device count".to_string());
             }
@@ -88,19 +77,20 @@ impl InputDeviceManager {
             }
 
             // Allocate buffer for device list
-            let mut devices =
-                vec![RAWINPUTDEVICELIST {
-                hDevice: null_mut(),
-                dwType: 0,
-            }; num_devices as usize];
+            let mut devices = vec![
+                RAWINPUTDEVICELIST {
+                    hDevice: null_mut(),
+                    dwType: 0,
+                };
+                num_devices as usize
+            ];
 
             // Get the actual device list
-            if
-                GetRawInputDeviceList(
-                    devices.as_mut_ptr(),
-                    &mut num_devices,
-                    std::mem::size_of::<RAWINPUTDEVICELIST>() as u32
-                ) == u32::MAX
+            if GetRawInputDeviceList(
+                devices.as_mut_ptr(),
+                &mut num_devices,
+                std::mem::size_of::<RAWINPUTDEVICELIST>() as u32,
+            ) == u32::MAX
             {
                 return Err("Failed to get raw input device list".to_string());
             }
@@ -109,12 +99,10 @@ impl InputDeviceManager {
             for device in devices.iter().take(num_devices as usize) {
                 if let Ok(device_info) = self.get_device_info(device.hDevice) {
                     // Only add keyboards and mice
-                    if
-                        matches!(
-                            device_info.device_type,
-                            InputDeviceType::Keyboard | InputDeviceType::Mouse
-                        )
-                    {
+                    if matches!(
+                        device_info.device_type,
+                        InputDeviceType::Keyboard | InputDeviceType::Mouse
+                    ) {
                         self.devices.insert(device_info.id.clone(), device_info);
                     }
                 }
@@ -124,11 +112,16 @@ impl InputDeviceManager {
     }
 
     #[cfg(windows)]
-    unsafe fn get_device_info(&self, device_handle: HANDLE) -> Result<InputDeviceInfo, String> {
+    unsafe fn get_device_info(&self, device_handle: HANDLE) -> Result<InputDeviceInfo, String> { unsafe {
         let mut name_size = 0u32;
 
         // Get device name size
-        GetRawInputDeviceInfoW(device_handle, RIDI_DEVICENAME as u32, null_mut(), &mut name_size);
+        GetRawInputDeviceInfoW(
+            device_handle,
+            RIDI_DEVICENAME as u32,
+            null_mut(),
+            &mut name_size,
+        );
 
         if name_size == 0 {
             return Err("Failed to get device name size".to_string());
@@ -136,13 +129,12 @@ impl InputDeviceManager {
 
         // Get device name
         let mut name_buffer = vec![0u16; name_size as usize];
-        if
-            GetRawInputDeviceInfoW(
-                device_handle,
-                RIDI_DEVICENAME as u32,
-                name_buffer.as_mut_ptr() as *mut _,
-                &mut name_size
-            ) == u32::MAX
+        if GetRawInputDeviceInfoW(
+            device_handle,
+            RIDI_DEVICENAME as u32,
+            name_buffer.as_mut_ptr() as *mut _,
+            &mut name_size,
+        ) == u32::MAX
         {
             return Err("Failed to get device name".to_string());
         }
@@ -158,13 +150,12 @@ impl InputDeviceManager {
             u: std::mem::zeroed(),
         };
 
-        if
-            GetRawInputDeviceInfoW(
-                device_handle,
-                RIDI_DEVICEINFO as u32,
-                &mut device_info as *mut _ as *mut _,
-                &mut info_size
-            ) == u32::MAX
+        if GetRawInputDeviceInfoW(
+            device_handle,
+            RIDI_DEVICEINFO as u32,
+            &mut device_info as *mut _ as *mut _,
+            &mut info_size,
+        ) == u32::MAX
         {
             return Err("Failed to get device info".to_string());
         }
@@ -192,33 +183,39 @@ impl InputDeviceManager {
             product_id: product_id as u16,
             is_enabled: true, // Default to enabled
         })
-    }
+    }}
 
     #[cfg(not(windows))]
     fn add_default_devices(&mut self) {
         // Add default keyboard and mouse for non-Windows platforms
-        self.devices.insert("default_keyboard".to_string(), InputDeviceInfo {
-            id: "default_keyboard".to_string(),
-            name: "Default Keyboard".to_string(),
-            device_type: InputDeviceType::Keyboard,
-            vendor_id: 0,
-            product_id: 0,
-            is_enabled: true,
-        });
+        self.devices.insert(
+            "default_keyboard".to_string(),
+            InputDeviceInfo {
+                id: "default_keyboard".to_string(),
+                name: "Default Keyboard".to_string(),
+                device_type: InputDeviceType::Keyboard,
+                vendor_id: 0,
+                product_id: 0,
+                is_enabled: true,
+            },
+        );
 
-        self.devices.insert("default_mouse".to_string(), InputDeviceInfo {
-            id: "default_mouse".to_string(),
-            name: "Default Mouse".to_string(),
-            device_type: InputDeviceType::Mouse,
-            vendor_id: 0,
-            product_id: 0,
-            is_enabled: true,
-        });
+        self.devices.insert(
+            "default_mouse".to_string(),
+            InputDeviceInfo {
+                id: "default_mouse".to_string(),
+                name: "Default Mouse".to_string(),
+                device_type: InputDeviceType::Mouse,
+                vendor_id: 0,
+                product_id: 0,
+                is_enabled: true,
+            },
+        );
     }
 
     fn hash_string(&self, s: &str) -> u64 {
         use std::collections::hash_map::DefaultHasher;
-        use std::hash::{ Hash, Hasher };
+        use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
         s.hash(&mut hasher);
@@ -268,12 +265,12 @@ impl InputDeviceManager {
 
     #[cfg(windows)]
     fn get_friendly_device_name(&self, device_path: &str) -> Result<String, String> {
+        
         use winapi::um::cfgmgr32::*;
-        use std::ffi::CString;
 
         unsafe {
             // Extract instance ID from device path
-            let instance_id = if let Some(start) = device_path.find("\\\\?\\") {
+            let instance_id = if let Some(_start) = device_path.find("\\\\?\\") {
                 let path_without_prefix = &device_path[4..]; // Remove "\\?\"
                 if let Some(end) = path_without_prefix.find("#{") {
                     path_without_prefix[..end].replace("\\", "\\")
@@ -293,29 +290,27 @@ impl InputDeviceManager {
             let mut buffer_size = buffer.len() as u32;
 
             // Locate device node
-            if
-                CM_Locate_DevNodeW(
-                    &mut dev_node,
-                    wide_instance_id.as_mut_ptr(),
-                    CM_LOCATE_DEVNODE_NORMAL
-                ) == CR_SUCCESS
+            if CM_Locate_DevNodeW(
+                &mut dev_node,
+                wide_instance_id.as_mut_ptr(),
+                CM_LOCATE_DEVNODE_NORMAL,
+            ) == CR_SUCCESS
             {
                 // Try to get friendly name
-                if
-                    CM_Get_DevNode_Registry_PropertyW(
-                        dev_node,
-                        CM_DRP_FRIENDLYNAME,
-                        null_mut(),
-                        buffer.as_mut_ptr() as *mut _,
-                        &mut buffer_size,
-                        0
-                    ) == CR_SUCCESS
+                if CM_Get_DevNode_Registry_PropertyW(
+                    dev_node,
+                    CM_DRP_FRIENDLYNAME,
+                    null_mut(),
+                    buffer.as_mut_ptr() as *mut _,
+                    &mut buffer_size,
+                    0,
+                ) == CR_SUCCESS
                 {
                     let friendly_name = OsString::from_wide(
-                        &buffer[..((buffer_size as usize) / 2).saturating_sub(1)]
+                        &buffer[..((buffer_size as usize) / 2).saturating_sub(1)],
                     )
-                        .to_string_lossy()
-                        .to_string();
+                    .to_string_lossy()
+                    .to_string();
                     if !friendly_name.is_empty() {
                         return Ok(friendly_name);
                     }
@@ -323,21 +318,20 @@ impl InputDeviceManager {
 
                 // Fallback to device description
                 buffer_size = buffer.len() as u32;
-                if
-                    CM_Get_DevNode_Registry_PropertyW(
-                        dev_node,
-                        CM_DRP_DEVICEDESC,
-                        null_mut(),
-                        buffer.as_mut_ptr() as *mut _,
-                        &mut buffer_size,
-                        0
-                    ) == CR_SUCCESS
+                if CM_Get_DevNode_Registry_PropertyW(
+                    dev_node,
+                    CM_DRP_DEVICEDESC,
+                    null_mut(),
+                    buffer.as_mut_ptr() as *mut _,
+                    &mut buffer_size,
+                    0,
+                ) == CR_SUCCESS
                 {
                     let device_desc = OsString::from_wide(
-                        &buffer[..((buffer_size as usize) / 2).saturating_sub(1)]
+                        &buffer[..((buffer_size as usize) / 2).saturating_sub(1)],
                     )
-                        .to_string_lossy()
-                        .to_string();
+                    .to_string_lossy()
+                    .to_string();
                     if !device_desc.is_empty() {
                         return Ok(device_desc);
                     }
@@ -501,8 +495,8 @@ impl InputDeviceManager {
     pub fn should_process_device(&self, device_id: &str, device_type: InputDeviceType) -> bool {
         match device_type {
             InputDeviceType::Keyboard => {
-                self.enabled_keyboards.is_empty() ||
-                    self.enabled_keyboards.contains(&device_id.to_string())
+                self.enabled_keyboards.is_empty()
+                    || self.enabled_keyboards.contains(&device_id.to_string())
             }
             InputDeviceType::Mouse => {
                 self.enabled_mice.is_empty() || self.enabled_mice.contains(&device_id.to_string())

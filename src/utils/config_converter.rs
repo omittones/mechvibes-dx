@@ -39,7 +39,7 @@ fn get_duration_with_symphonia(file_path: &str) -> Result<f64, Box<dyn std::erro
 
     let probed = symphonia::default::get_probe().format(&hint, mss, &fmt_opts, &meta_opts)?;
 
-    let mut format = probed.format;
+    let format = probed.format;
 
     // Get the default track
     let track = format
@@ -688,7 +688,7 @@ fn concatenate_audio_files_with_timing(
                     channels = file_channels;
                     println!("   🎵 Using format: {}Hz, {} channels", sample_rate, channels);
                     // Recalculate offset for first file with correct sample rate
-                    let corrected_offset =
+                    let _corrected_offset =
                         ((all_samples.len() as f64) / ((sample_rate as f64) * (channels as f64))) *
                         1000.0;
                     // Update if needed

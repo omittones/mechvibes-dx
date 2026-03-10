@@ -1,6 +1,6 @@
 use crate::state::paths;
-use crate::utils::{ data, path, soundpack };
-use serde::{ Deserialize, Serialize };
+use crate::utils::{data, path, soundpack};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -138,27 +138,28 @@ pub struct SoundpackCount {
 
 impl SoundpackCache {
     fn cache_file() -> String {
-        paths::data::soundpack_cache_json().to_string_lossy().to_string()
+        paths::data::soundpack_cache_json()
+            .to_string_lossy()
+            .to_string()
     }
 
     pub fn load() -> Self {
         let cache_file = Self::cache_file();
         // Load metadata cache using data utilities
-        let cache = match
-            data::load_json_from_file::<SoundpackCache>(std::path::Path::new(&cache_file))
-        {
-            Ok(cache) => {
-                println!(
-                    "📦 Loaded soundpack metadata cache with {} entries",
-                    cache.soundpacks.len()
-                );
-                cache
-            }
-            Err(e) => {
-                eprintln!("⚠️  Failed to load cache file: {}", e);
-                Self::new()
-            }
-        };
+        let cache =
+            match data::load_json_from_file::<SoundpackCache>(std::path::Path::new(&cache_file)) {
+                Ok(cache) => {
+                    println!(
+                        "📦 Loaded soundpack metadata cache with {} entries",
+                        cache.soundpacks.len()
+                    );
+                    cache
+                }
+                Err(e) => {
+                    eprintln!("⚠️  Failed to load cache file: {}", e);
+                    Self::new()
+                }
+            };
 
         // Auto-refresh on startup has been disabled to improve startup performance
         // Cache will be refreshed manually via UI or when importing soundpacks
@@ -185,11 +186,10 @@ impl SoundpackCache {
         }
 
         match data::save_json_to_file(self, std::path::Path::new(&cache_file)) {
-            Ok(_) =>
-                println!(
-                    "💾 Saved soundpack metadata cache with {} entries",
-                    self.soundpacks.len()
-                ),
+            Ok(_) => println!(
+                "💾 Saved soundpack metadata cache with {} entries",
+                self.soundpacks.len()
+            ),
             Err(e) => eprintln!("⚠️  Failed to save metadata cache: {}", e),
         }
     }
@@ -207,23 +207,28 @@ impl SoundpackCache {
         let builtin_soundpacks_dir = paths::soundpacks::get_builtin_soundpacks_dir()
             .to_string_lossy()
             .to_string();
-        println!("📂 Scanning built-in soundpacks in: {}", builtin_soundpacks_dir);
-        self.scan_soundpack_type(&builtin_soundpacks_dir, "keyboard", false);
-        self.scan_soundpack_type(&builtin_soundpacks_dir, "mouse", true);
+        println!(
+            "📂 Scanning built-in soundpacks in: {}",
+            builtin_soundpacks_dir
+        );
+        self.scan_soundpack_type(&builtin_soundpacks_dir, false);
+        self.scan_soundpack_type(&builtin_soundpacks_dir, true);
 
         // Scan custom soundpacks (system app data)
         let custom_soundpacks_dir = paths::soundpacks::get_custom_soundpacks_dir()
             .to_string_lossy()
             .to_string();
-        println!("📂 Scanning custom soundpacks in: {}", custom_soundpacks_dir);
-        self.scan_soundpack_type(&custom_soundpacks_dir, "keyboard", false);
-        self.scan_soundpack_type(&custom_soundpacks_dir, "mouse", true);
+        println!(
+            "📂 Scanning custom soundpacks in: {}",
+            custom_soundpacks_dir
+        );
+        self.scan_soundpack_type(&custom_soundpacks_dir, false);
+        self.scan_soundpack_type(&custom_soundpacks_dir, true);
 
         // Update count based on loaded soundpacks
         self.update_count();
 
-        self.last_scan = std::time::SystemTime
-            ::now()
+        self.last_scan = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
@@ -249,51 +254,73 @@ impl SoundpackCache {
         self.count.keyboard = keyboard_count;
         self.count.mouse = mouse_count;
 
-        println!("📊 Updated count: {} keyboard, {} mouse soundpacks", keyboard_count, mouse_count);
+        println!(
+            "📊 Updated count: {} keyboard, {} mouse soundpacks",
+            keyboard_count, mouse_count
+        );
     }
 
-    fn scan_soundpack_type(&mut self, soundpacks_dir: &str, soundpack_type: &str, is_mouse: bool) {
-        let type_dir = std::path::Path::new(soundpacks_dir).join(soundpack_type);
+    fn scan_soundpack_type(&mut self, soundpacks_dir: &str, is_mouse: bool) {
+        let type_dir = std::path::Path::new(soundpacks_dir);
         println!(
             "📂 [CACHE DEBUG] Scanning {} soundpacks in: {}",
-            soundpack_type,
+            if is_mouse { "mouse" } else { "keyboard" },
             type_dir.display()
         );
 
         if type_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&type_dir) {
                 for entry in entries.filter_map(|e| e.ok()) {
-                    if let Some(soundpack_name) = entry.file_name().to_str() {
-                        let full_soundpack_id = format!("{}/{}", soundpack_type, soundpack_name);
-                        println!("🔍 [CACHE DEBUG] Processing soundpack: {}", full_soundpack_id);
+                    if let Some(soundpack_name) = entry.file_name().to_str()
+                        && let Some(soundpack_path) = entry.path().to_str()
+                    {
+                        let full_soundpack_id = format!(
+                            "{}/{}",
+                            if is_mouse { "mouse" } else { "keyboard" },
+                            soundpack_name
+                        );
+                        println!(
+                            "🔍 [CACHE DEBUG] Processing soundpack {}",
+                            full_soundpack_id
+                        );
 
-                        match soundpack::load_soundpack_metadata(&full_soundpack_id) {
+                        match soundpack::load_soundpack_metadata(
+                            &soundpack_path,
+                            &full_soundpack_id,
+                        ) {
                             Ok(metadata) => {
-                                println!("✅ [CACHE DEBUG] Successfully loaded metadata for: {}", full_soundpack_id);
+                                println!(
+                                    "✅ [CACHE DEBUG] Successfully loaded metadata for: {}",
+                                    full_soundpack_id
+                                );
                                 self.soundpacks.insert(full_soundpack_id, metadata);
                             }
                             Err(e) => {
                                 println!(
-                                    "❌ [CACHE DEBUG] Failed to load {} metadata for {}: {}",
-                                    soundpack_type,
-                                    soundpack_name,
-                                    e
+                                    "❌ [CACHE DEBUG] Failed to load metadata for {}: {}",
+                                    soundpack_name, e
                                 );
                                 self.insert_error_metadata(
                                     &full_soundpack_id,
                                     soundpack_name,
                                     e,
-                                    is_mouse
+                                    is_mouse,
                                 );
                             }
                         }
                     }
                 }
             } else {
-                println!("⚠️ [CACHE DEBUG] Failed to read directory: {}", type_dir.display());
+                println!(
+                    "⚠️ [CACHE DEBUG] Failed to read directory: {}",
+                    type_dir.display()
+                );
             }
         } else {
-            println!("⚠️ [CACHE DEBUG] Directory does not exist: {}", type_dir.display());
+            println!(
+                "⚠️ [CACHE DEBUG] Directory does not exist: {}",
+                type_dir.display()
+            );
         }
     }
 
@@ -302,9 +329,13 @@ impl SoundpackCache {
         full_soundpack_id: &str,
         soundpack_name: &str,
         error: String,
-        is_mouse: bool
+        is_mouse: bool,
     ) {
-        let soundpack_type = if is_mouse { SoundpackType::Mouse } else { SoundpackType::Keyboard };
+        let soundpack_type = if is_mouse {
+            SoundpackType::Mouse
+        } else {
+            SoundpackType::Keyboard
+        };
         let error_metadata = SoundpackMetadata {
             id: full_soundpack_id.to_string(),
             name: format!("Error: {}", soundpack_name),
@@ -323,6 +354,7 @@ impl SoundpackCache {
             can_be_converted: false,
             last_error: Some(error),
         };
-        self.soundpacks.insert(full_soundpack_id.to_string(), error_metadata);
+        self.soundpacks
+            .insert(full_soundpack_id.to_string(), error_metadata);
     }
 }

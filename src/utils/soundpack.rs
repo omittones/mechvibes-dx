@@ -1,19 +1,21 @@
 use crate::state::paths;
 use crate::state::soundpack::SoundpackMetadata;
 use crate::utils::config_converter;
-use crate::utils::soundpack_validator::{ validate_soundpack_config, SoundpackValidationStatus };
+use crate::utils::soundpack_validator::{SoundpackValidationStatus, validate_soundpack_config};
 use std::fs;
 
 /// Load soundpack metadata from config.json
-pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, String> {
+pub fn load_soundpack_metadata(
+    _soundpack_path: &str,
+    soundpack_id: &str,
+) -> Result<SoundpackMetadata, String> {
     let config_path = paths::soundpacks::config_json(soundpack_id);
     let mut last_error: Option<String> = None; // Validate the soundpack configuration first
     let validation_result = validate_soundpack_config(&config_path);
 
     // If it's a V1 config that can be converted, auto-convert it
-    if
-        validation_result.status == SoundpackValidationStatus::VersionOneNeedsConversion &&
-        validation_result.can_be_converted
+    if validation_result.status == SoundpackValidationStatus::VersionOneNeedsConversion
+        && validation_result.can_be_converted
     {
         // Create backup of original config
         let backup_path = format!("{}.v1.backup", config_path);
@@ -36,13 +38,11 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
             }
         }
     }
-    let content = fs
-        ::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config: {}", e))?;
+    let content =
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config: {}", e))?;
 
-    let mut config: serde_json::Value = serde_json
-        ::from_str(&content)
-        .map_err(|e| format!("Failed to parse config: {}", e))?;
+    let mut config: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
 
     // Check if this is V2 config with multi method and convert to single method
     if let Some(definition_method) = config.get("definition_method").and_then(|v| v.as_str()) {
@@ -50,22 +50,17 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
             println!("🔄 [CACHE DEBUG] Found V2 multi method config, converting to single method");
             let soundpack_dir = paths::soundpacks::soundpack_dir(soundpack_id);
 
-            if
-                let Err(e) = config_converter::convert_v2_multi_to_single(
-                    &config_path,
-                    &soundpack_dir
-                )
+            if let Err(e) =
+                config_converter::convert_v2_multi_to_single(&config_path, &soundpack_dir)
             {
                 println!("❌ [CACHE DEBUG] Failed to convert multi to single: {}", e);
                 return Err(format!("Failed to convert multi to single method: {}", e));
             }
 
             // Re-read the converted config
-            let new_content = fs
-                ::read_to_string(&config_path)
+            let new_content = fs::read_to_string(&config_path)
                 .map_err(|e| format!("Failed to re-read converted config: {}", e))?;
-            config = serde_json
-                ::from_str(&new_content)
+            config = serde_json::from_str(&new_content)
                 .map_err(|e| format!("Failed to parse converted config: {}", e))?;
 
             println!("✅ [CACHE DEBUG] Successfully converted to single method");
@@ -94,7 +89,10 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
         );
 
         if !std::path::Path::new(&full_audio_path).exists() {
-            println!("⚠️ [CACHE DEBUG] Audio file not found during cache refresh: {}", full_audio_path);
+            println!(
+                "⚠️ [CACHE DEBUG] Audio file not found during cache refresh: {}",
+                full_audio_path
+            );
         }
     } else {
         println!("⚠️ [CACHE DEBUG] No audio_file field found in config");
@@ -126,9 +124,8 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
     let final_validation = validate_soundpack_config(&config_path);
 
     // Get file stats
-    let metadata = fs
-        ::metadata(&config_path)
-        .map_err(|e| format!("Failed to get metadata: {}", e))?;
+    let metadata =
+        fs::metadata(&config_path).map_err(|e| format!("Failed to get metadata: {}", e))?;
     Ok(SoundpackMetadata {
         id: soundpack_id.to_string(), // Use soundpack_id (with prefix) instead of config ID
         name,
@@ -163,7 +160,10 @@ pub fn load_soundpack_metadata(soundpack_id: &str) -> Result<SoundpackMetadata, 
                     println!("✅ Generated asset URL for {}: {}", soundpack_id, asset_url);
                     Some(asset_url)
                 } else {
-                    println!("❌ Icon not found for {}, setting empty string", soundpack_id);
+                    println!(
+                        "❌ Icon not found for {}, setting empty string",
+                        soundpack_id
+                    );
                     Some(String::new()) // Empty string if icon file not found
                 }
             } else {

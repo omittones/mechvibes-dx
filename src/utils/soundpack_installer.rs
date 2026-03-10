@@ -2,7 +2,6 @@ use crate::utils::path;
 use serde_json::Value;
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
 use uuid::Uuid;
 use zip::ZipArchive;
 

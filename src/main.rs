@@ -1,4 +1,4 @@
-#![windows_subsystem = "windows"]
+#![windows_subsystem = "console"]
 #![allow(non_snake_case)]
 
 mod components;
@@ -6,15 +6,17 @@ mod libs;
 mod state;
 mod utils;
 
-use dioxus::desktop::{ Config, LogicalSize, WindowBuilder };
+use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
-use utils::constants::{ APP_NAME };
-use libs::ui;
-use libs::window_manager::{ WindowAction, WINDOW_MANAGER };
-use libs::input_listener::start_unified_input_listener;
 use libs::focused_input_listener::start_focused_keyboard_listener;
-use libs::input_manager::{ init_input_channels, init_window_focus_state_with_value, get_window_focus_state };
+use libs::input_listener::start_unified_input_listener;
+use libs::input_manager::{
+    get_window_focus_state, init_input_channels, init_window_focus_state_with_value,
+};
+use libs::ui;
+use libs::window_manager::{WINDOW_MANAGER, WindowAction};
 use std::sync::mpsc;
+use utils::constants::APP_NAME;
 
 #[cfg(target_os = "linux")]
 use libs::evdev_input_listener::start_evdev_keyboard_listener;
@@ -39,16 +41,35 @@ fn load_icon() -> Option<dioxus::desktop::tao::window::Icon> {
             let target_size = 32u32;
 
             let final_rgba = if width != target_size || height != target_size {
-                debug_print!("🔄 Resizing icon from {}x{} to {}x{} for Windows taskbar", width, height, target_size, target_size);
-                image::imageops::resize(&rgba, target_size, target_size, image::imageops::FilterType::Lanczos3)
+                debug_print!(
+                    "🔄 Resizing icon from {}x{} to {}x{} for Windows taskbar",
+                    width,
+                    height,
+                    target_size,
+                    target_size
+                );
+                image::imageops::resize(
+                    &rgba,
+                    target_size,
+                    target_size,
+                    image::imageops::FilterType::Lanczos3,
+                )
             } else {
                 debug_print!("✅ Icon already at optimal size ({}x{})", width, height);
                 rgba
             };
 
-            match dioxus::desktop::tao::window::Icon::from_rgba(final_rgba.into_raw(), target_size, target_size) {
+            match dioxus::desktop::tao::window::Icon::from_rgba(
+                final_rgba.into_raw(),
+                target_size,
+                target_size,
+            ) {
                 Ok(icon) => {
-                    debug_print!("✅ Successfully created window icon ({}x{})", target_size, target_size);
+                    debug_print!(
+                        "✅ Successfully created window icon ({}x{})",
+                        target_size,
+                        target_size
+                    );
                     Some(icon)
                 }
                 Err(e) => {
@@ -85,10 +106,9 @@ fn main() {
     debug_print!("🔍 Command line args: {:?}", args);
 
     // Check if we should start minimized (from auto-startup)
-    let should_start_minimized =
-        args.contains(&"--minimized".to_string()) ||
-        (state::config::AppConfig::load().auto_start &&
-            state::config::AppConfig::load().start_minimized);
+    let should_start_minimized = args.contains(&"--minimized".to_string())
+        || (state::config::AppConfig::load().auto_start
+            && state::config::AppConfig::load().start_minimized);
 
     // Register protocol on first run
     // if let Err(e) = protocol::register_protocol() {
@@ -122,13 +142,27 @@ fn main() {
     let hotkey_tx_clone = hotkey_tx.clone();
 
     // Initialize global input channels for UI to access (including senders for window events)
-    init_input_channels(keyboard_rx, mouse_rx, hotkey_rx, keyboard_tx_clone, mouse_tx_clone, hotkey_tx_clone);
+    init_input_channels(
+        keyboard_rx,
+        mouse_rx,
+        hotkey_rx,
+        keyboard_tx_clone,
+        mouse_tx_clone,
+        hotkey_tx_clone,
+    );
 
     // Initialize window focus state
     // If window starts visible (not minimized), it will be focused
     let initial_focus_state = !should_start_minimized;
     init_window_focus_state_with_value(initial_focus_state);
-    debug_print!("🔍 Initial window focus state: {}", if initial_focus_state { "FOCUSED" } else { "UNFOCUSED" });
+    debug_print!(
+        "🔍 Initial window focus state: {}",
+        if initial_focus_state {
+            "FOCUSED"
+        } else {
+            "UNFOCUSED"
+        }
+    );
 
     // Detect display server on Linux
     #[cfg(target_os = "linux")]
@@ -158,7 +192,12 @@ fn main() {
             let focus_state = get_window_focus_state();
 
             debug_print!("🎮 Starting unified input listener (X11 mode - unfocused)...");
-            start_unified_input_listener(keyboard_tx.clone(), mouse_tx, hotkey_tx, Some(focus_state.clone()));
+            start_unified_input_listener(
+                keyboard_tx.clone(),
+                mouse_tx,
+                hotkey_tx,
+                Some(focus_state.clone()),
+            );
 
             debug_print!("🎮 Starting focused keyboard listener (X11 mode - focused)...");
             start_focused_keyboard_listener(keyboard_tx, focus_state);
@@ -172,7 +211,12 @@ fn main() {
         let focus_state = get_window_focus_state();
 
         debug_print!("🎮 Starting unified input listener (unfocused)...");
-        start_unified_input_listener(keyboard_tx.clone(), mouse_tx, hotkey_tx, Some(focus_state.clone()));
+        start_unified_input_listener(
+            keyboard_tx.clone(),
+            mouse_tx,
+            hotkey_tx,
+            Some(focus_state.clone()),
+        );
 
         debug_print!("🎮 Starting focused keyboard listener (focused)...");
         start_focused_keyboard_listener(keyboard_tx, focus_state);
@@ -184,9 +228,9 @@ fn main() {
 
     // Window dimensions - allow vertical resizing
     let window_width = 470;
-    let min_height = 600;   // Minimum height for compact mode
+    let min_height = 600; // Minimum height for compact mode
     let default_height = 820; // Default height
-    let max_height = 820;  // Maximum height
+    let max_height = 820; // Maximum height
 
     // Load icon before creating window
     let window_icon = load_icon();
@@ -209,12 +253,12 @@ fn main() {
         .with_window_icon(window_icon); // Set window icon for taskbar
 
     // Create config with our window settings and custom protocol handlers
-    let config = Config::new()
-        .with_window(window_builder)
-        .with_menu(None);
+    let config = Config::new().with_window(window_builder).with_menu(None);
 
     // Launch the app with our config
-    dioxus::LaunchBuilder::desktop().with_cfg(config).launch(app_with_stylesheets)
+    dioxus::LaunchBuilder::desktop()
+        .with_cfg(config)
+        .launch(app_with_stylesheets)
 }
 
 fn app_with_stylesheets() -> Element {

@@ -1,7 +1,7 @@
 use crate::state::config::AppConfig;
 use crate::state::paths;
 use crate::state::soundpack::SoundPack;
-use crate::state::soundpack::{ SoundpackCache, SoundpackMetadata };
+use crate::state::soundpack::{SoundpackCache, SoundpackMetadata};
 
 use super::audio_context::AudioContext;
 
@@ -32,7 +32,7 @@ pub fn load_keyboard_soundpack(context: &AudioContext, soundpack_id: &str) -> Re
 pub fn load_keyboard_soundpack_with_cache_control(
     context: &AudioContext,
     soundpack_id: &str,
-    update_cache_on_error: bool
+    update_cache_on_error: bool,
 ) -> Result<(), String> {
     // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
@@ -58,7 +58,7 @@ pub fn load_mouse_soundpack(context: &AudioContext, soundpack_id: &str) -> Resul
 pub fn load_mouse_soundpack_with_cache_control(
     context: &AudioContext,
     soundpack_id: &str,
-    update_cache_on_error: bool
+    update_cache_on_error: bool,
 ) -> Result<(), String> {
     // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
@@ -81,9 +81,10 @@ pub fn load_mouse_soundpack_with_cache_control(
 
 fn load_audio_file(
     soundpack_path: &str,
-    soundpack: &SoundPack
+    soundpack: &SoundPack,
 ) -> Result<(Vec<f32>, u16, u32), String> {
-    let sound_file_path = soundpack.audio_file
+    let sound_file_path = soundpack
+        .audio_file
         .as_ref()
         .map(|src| format!("{}/{}", soundpack_path, src.trim_start_matches("./")))
         .ok_or_else(|| "No audio_file field in soundpack config".to_string())?;
@@ -94,25 +95,24 @@ fn load_audio_file(
 
     // Use Symphonia for audio loading instead of Rodio
     match load_audio_with_symphonia(&sound_file_path) {
-        Ok((samples, channels, sample_rate)) => { Ok((samples, channels, sample_rate)) }
-        Err(e) => { Err(format!("Failed to load audio: {}", e)) }
+        Ok((samples, channels, sample_rate)) => Ok((samples, channels, sample_rate)),
+        Err(e) => Err(format!("Failed to load audio: {}", e)),
     }
 }
 
 /// Load audio file using Symphonia for consistent duration detection
 fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), String> {
-    use symphonia::core::audio::{ AudioBufferRef, Signal };
-    use symphonia::core::codecs::{ DecoderOptions, CODEC_TYPE_NULL };
+    use std::fs::File;
+    use symphonia::core::audio::{AudioBufferRef, Signal};
+    use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
     use symphonia::core::formats::FormatOptions;
     use symphonia::core::io::MediaSourceStream;
     use symphonia::core::meta::MetadataOptions;
     use symphonia::core::probe::Hint;
-    use std::fs::File;
 
     // First, check if file exists and has content
-    let metadata = std::fs
-        ::metadata(file_path)
-        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    let metadata =
+        std::fs::metadata(file_path).map_err(|e| format!("Failed to get file metadata: {}", e))?;
     if metadata.len() == 0 {
         return Err(format!("Audio file is empty: {}", file_path));
     }
@@ -129,8 +129,7 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
     let meta_opts: MetadataOptions = Default::default();
     let fmt_opts: FormatOptions = Default::default();
 
-    let probed = symphonia::default
-        ::get_probe()
+    let probed = symphonia::default::get_probe()
         .format(&hint, mss, &fmt_opts, &meta_opts)
         .map_err(|e| {
             format!(
@@ -149,8 +148,7 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
         .ok_or("No supported audio tracks found")?;
 
     let dec_opts: DecoderOptions = Default::default();
-    let mut decoder = symphonia::default
-        ::get_codecs()
+    let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &dec_opts)
         .map_err(|e| format!("Failed to create decoder: {}", e))?;
 
@@ -240,8 +238,8 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
                         if channels == 1 {
                             for &sample in buf.chan(0) {
                                 samples.push(
-                                    ((sample as f32) - (u32::MAX as f32) / 2.0) /
-                                        ((u32::MAX as f32) / 2.0)
+                                    ((sample as f32) - (u32::MAX as f32) / 2.0)
+                                        / ((u32::MAX as f32) / 2.0),
                                 );
                             }
                         } else {
@@ -253,12 +251,12 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
                             };
                             for (left, right) in left_chan.iter().zip(right_chan.iter()) {
                                 samples.push(
-                                    ((*left as f32) - (u32::MAX as f32) / 2.0) /
-                                        ((u32::MAX as f32) / 2.0)
+                                    ((*left as f32) - (u32::MAX as f32) / 2.0)
+                                        / ((u32::MAX as f32) / 2.0),
                                 );
                                 samples.push(
-                                    ((*right as f32) - (u32::MAX as f32) / 2.0) /
-                                        ((u32::MAX as f32) / 2.0)
+                                    ((*right as f32) - (u32::MAX as f32) / 2.0)
+                                        / ((u32::MAX as f32) / 2.0),
                                 );
                             }
                         }
@@ -267,8 +265,8 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
                         if channels == 1 {
                             for &sample in buf.chan(0) {
                                 samples.push(
-                                    ((sample as f32) - (u16::MAX as f32) / 2.0) /
-                                        ((u16::MAX as f32) / 2.0)
+                                    ((sample as f32) - (u16::MAX as f32) / 2.0)
+                                        / ((u16::MAX as f32) / 2.0),
                                 );
                             }
                         } else {
@@ -280,12 +278,12 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
                             };
                             for (left, right) in left_chan.iter().zip(right_chan.iter()) {
                                 samples.push(
-                                    ((*left as f32) - (u16::MAX as f32) / 2.0) /
-                                        ((u16::MAX as f32) / 2.0)
+                                    ((*left as f32) - (u16::MAX as f32) / 2.0)
+                                        / ((u16::MAX as f32) / 2.0),
                                 );
                                 samples.push(
-                                    ((*right as f32) - (u16::MAX as f32) / 2.0) /
-                                        ((u16::MAX as f32) / 2.0)
+                                    ((*right as f32) - (u16::MAX as f32) / 2.0)
+                                        / ((u16::MAX as f32) / 2.0),
                                 );
                             }
                         }
@@ -406,7 +404,7 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
 pub fn load_keyboard_soundpack_optimized(
     context: &AudioContext,
     soundpack_id: &str,
-    update_cache_on_error: bool
+    update_cache_on_error: bool,
 ) -> Result<(), String> {
     println!("📂 Direct loading keyboard soundpack: {}", soundpack_id);
 
@@ -415,9 +413,8 @@ pub fn load_keyboard_soundpack_optimized(
 
     // Load config.json
     let config_path = paths::soundpacks::config_json(soundpack_id);
-    let config_content = std::fs
-        ::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config: {}", e))?; // Only load V2 config format - V1 configs must be converted first
+    let config_content = std::fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config at {}: {}", config_path, e))?; // Only load V2 config format - V1 configs must be converted first
     let mut soundpack: SoundPack = serde_json::from_str(&config_content).map_err(|e| {
         // Check if this might be a V1 config
         if config_content.contains("\"key_define_type\"") || config_content.contains("\"defines\"") {
@@ -459,18 +456,21 @@ pub fn load_keyboard_soundpack_optimized(
                     name: soundpack.name.clone(),
                     author: soundpack.author.clone(),
                     description: soundpack.description.clone(),
-                    version: soundpack.version.clone().unwrap_or_else(|| "1.0".to_string()),
+                    version: soundpack
+                        .version
+                        .clone()
+                        .unwrap_or_else(|| "1.0".to_string()),
                     tags: soundpack.tags.clone().unwrap_or_default(),
                     icon: soundpack.icon.clone(),
                     soundpack_type: determine_soundpack_type(soundpack_id),
                     folder_path: soundpack_id.to_string(), // Add folder_path for correct path resolution
                     last_modified: 0,
-                    last_accessed: std::time::SystemTime
-                        ::now()
+                    last_accessed: std::time::SystemTime::now()
                         .duration_since(std::time::SystemTime::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs(),
-                    config_version: soundpack.config_version
+                    config_version: soundpack
+                        .config_version
                         .as_ref()
                         .and_then(|v| v.parse::<u32>().ok()),
                     is_valid_v2: true,
@@ -484,7 +484,10 @@ pub fn load_keyboard_soundpack_optimized(
     }
     cache.save();
 
-    println!("✅ Successfully loaded keyboard soundpack: {} (direct from files)", soundpack.name);
+    println!(
+        "✅ Successfully loaded keyboard soundpack: {} (direct from files)",
+        soundpack.name
+    );
     Ok(())
 }
 
@@ -492,7 +495,7 @@ pub fn load_keyboard_soundpack_optimized(
 pub fn load_mouse_soundpack_optimized(
     context: &AudioContext,
     soundpack_id: &str,
-    update_cache_on_error: bool
+    update_cache_on_error: bool,
 ) -> Result<(), String> {
     println!("📂 Direct loading mouse soundpack: {}", soundpack_id);
 
@@ -501,11 +504,9 @@ pub fn load_mouse_soundpack_optimized(
 
     // Load config.json
     let config_path = paths::soundpacks::config_json(soundpack_id);
-    let config_content = std::fs
-        ::read_to_string(&config_path)
+    let config_content = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config: {}", e))?;
-    let mut soundpack: SoundPack = serde_json
-        ::from_str(&config_content)
+    let mut soundpack: SoundPack = serde_json::from_str(&config_content)
         .map_err(|e| format!("Failed to parse config: {}", e))?;
 
     // Override soundpack_type based on folder path (more reliable than JSON content)
@@ -540,18 +541,21 @@ pub fn load_mouse_soundpack_optimized(
                     name: soundpack.name.clone(),
                     author: soundpack.author.clone(),
                     description: soundpack.description.clone(),
-                    version: soundpack.version.clone().unwrap_or_else(|| "1.0".to_string()),
+                    version: soundpack
+                        .version
+                        .clone()
+                        .unwrap_or_else(|| "1.0".to_string()),
                     tags: soundpack.tags.clone().unwrap_or_default(),
                     icon: soundpack.icon.clone(),
                     soundpack_type: determine_soundpack_type(soundpack_id),
                     folder_path: soundpack_id.to_string(), // Add folder_path for correct path resolution
                     last_modified: 0,
-                    last_accessed: std::time::SystemTime
-                        ::now()
+                    last_accessed: std::time::SystemTime::now()
                         .duration_since(std::time::SystemTime::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs(),
-                    config_version: soundpack.config_version
+                    config_version: soundpack
+                        .config_version
                         .as_ref()
                         .and_then(|v| v.parse::<u32>().ok()),
                     is_valid_v2: true,
@@ -565,7 +569,10 @@ pub fn load_mouse_soundpack_optimized(
     }
     cache.save();
 
-    println!("✅ Successfully loaded mouse soundpack: {} (direct from files)", soundpack.name);
+    println!(
+        "✅ Successfully loaded mouse soundpack: {} (direct from files)",
+        soundpack.name
+    );
     Ok(())
 }
 
@@ -573,7 +580,7 @@ fn update_keyboard_context(
     context: &AudioContext,
     samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
     key_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
-    soundpack: &SoundPack
+    soundpack: &SoundPack,
 ) -> Result<(), String> {
     let (audio_samples, channels, sample_rate) = samples;
     let sample_count = audio_samples.len();
@@ -601,7 +608,11 @@ fn update_keyboard_context(
             key_map.insert(key.clone(), converted_mappings);
         }
 
-        println!("🗝️ Updated key mappings: {} -> {} keys", old_count, key_map.len());
+        println!(
+            "🗝️ Updated key mappings: {} -> {} keys",
+            old_count,
+            key_map.len()
+        );
     } else {
         return Err("Failed to acquire lock on key_map".to_string());
     }
@@ -625,8 +636,7 @@ fn update_keyboard_context(
 
     println!(
         "✅ Successfully loaded keyboard soundpack: {} ({} key mappings) - Memory properly cleaned",
-        soundpack_name,
-        key_mapping_count
+        soundpack_name, key_mapping_count
     );
     Ok(())
 }
@@ -635,7 +645,7 @@ fn update_mouse_context(
     context: &AudioContext,
     samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
     mouse_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
-    soundpack: &SoundPack
+    soundpack: &SoundPack,
 ) -> Result<(), String> {
     let (audio_samples, channels, sample_rate) = samples;
     let sample_count = audio_samples.len();
@@ -663,7 +673,11 @@ fn update_mouse_context(
             mouse_map.insert(button.clone(), converted_mappings);
         }
 
-        println!("🖱️ Updated mouse mappings: {} -> {} buttons", old_count, mouse_map.len());
+        println!(
+            "🖱️ Updated mouse mappings: {} -> {} buttons",
+            old_count,
+            mouse_map.len()
+        );
     } else {
         return Err("Failed to acquire lock on mouse_map".to_string());
     }
@@ -687,27 +701,25 @@ fn update_mouse_context(
 
     println!(
         "✅ Successfully loaded mouse soundpack: {} ({} mouse mappings) - Memory properly cleaned",
-        soundpack_name,
-        mouse_mapping_count
+        soundpack_name, mouse_mapping_count
     );
     Ok(())
 }
 
 fn create_soundpack_metadata(
     soundpack_path: &str,
-    soundpack: &SoundPack
+    soundpack: &SoundPack,
 ) -> Result<SoundpackMetadata, String> {
     // Extract the soundpack ID from the full path
     // e.g., "/path/to/soundpacks/keyboard/Apex by teia" -> "keyboard/Apex by teia"
     let soundpacks_dir = crate::utils::path::get_soundpacks_dir_absolute();
-    let id = if
-        let Ok(relative_path) = std::path::Path::new(soundpack_path).strip_prefix(&soundpacks_dir)
+    let id = if let Ok(relative_path) =
+        std::path::Path::new(soundpack_path).strip_prefix(&soundpacks_dir)
     {
         relative_path.to_string_lossy().replace('\\', "/")
     } else {
         // Fallback to just the folder name if we can't get relative path
-        std::path::Path
-            ::new(soundpack_path)
+        std::path::Path::new(soundpack_path)
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("unknown")
@@ -716,13 +728,12 @@ fn create_soundpack_metadata(
 
     // Get file metadata
     let last_modified = match std::fs::metadata(soundpack_path) {
-        Ok(metadata) =>
-            metadata
-                .modified()
-                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
+        Ok(metadata) => metadata
+            .modified()
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs(),
         Err(_) => 0,
     };
 
@@ -731,7 +742,10 @@ fn create_soundpack_metadata(
         name: soundpack.name.clone(),
         author: soundpack.author.clone(),
         description: soundpack.description.clone(),
-        version: soundpack.version.clone().unwrap_or_else(|| "1.0".to_string()),
+        version: soundpack
+            .version
+            .clone()
+            .unwrap_or_else(|| "1.0".to_string()),
         tags: soundpack.tags.clone().unwrap_or_default(),
         icon: {
             // Generate dynamic URL for icon instead of base64 conversion
@@ -748,10 +762,9 @@ fn create_soundpack_metadata(
             }
         },
         soundpack_type: soundpack.soundpack_type.clone(), // Include the mouse field
-        folder_path: id, // Use the derived folder path for loading
+        folder_path: id,                                  // Use the derived folder path for loading
         last_modified,
-        last_accessed: std::time::SystemTime
-            ::now()
+        last_accessed: std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(), // Add validation fields with default values
@@ -766,14 +779,15 @@ fn create_soundpack_metadata(
 
 fn create_key_mappings(
     soundpack: &SoundPack,
-    _samples: &[f32]
+    _samples: &[f32],
 ) -> std::collections::HashMap<String, Vec<(f64, f64)>> {
     let mut key_mappings = std::collections::HashMap::new(); // For keyboard soundpacks, use the definitions field for keyboard mappings
     // For mouse soundpacks, return empty key mappings
     if soundpack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard {
         for (key, key_def) in &soundpack.definitions {
             // Convert KeyDefinition timing to Vec<(f64, f64)>
-            let converted_mappings: Vec<(f64, f64)> = key_def.timing
+            let converted_mappings: Vec<(f64, f64)> = key_def
+                .timing
                 .iter()
                 .map(|pair| (pair[0] as f64, pair[1] as f64))
                 .collect();
@@ -786,14 +800,15 @@ fn create_key_mappings(
 
 fn create_mouse_mappings(
     soundpack: &SoundPack,
-    _samples: &[f32]
+    _samples: &[f32],
 ) -> std::collections::HashMap<String, Vec<(f64, f64)>> {
     let mut mouse_mappings = std::collections::HashMap::new(); // For mouse soundpacks, use the definitions field directly
     if soundpack.soundpack_type == crate::state::soundpack::SoundpackType::Mouse {
         // This is a mouse soundpack, use definitions field for mouse mappings
         for (button, key_def) in &soundpack.definitions {
             // Convert KeyDefinition timing to Vec<(f64, f64)>
-            let converted_mappings: Vec<(f64, f64)> = key_def.timing
+            let converted_mappings: Vec<(f64, f64)> = key_def
+                .timing
                 .iter()
                 .map(|pair| (pair[0] as f64, pair[1] as f64))
                 .collect();
@@ -820,7 +835,8 @@ fn create_mouse_mappings(
         ];
         for (mouse_button, keyboard_key) in &fallback_mappings {
             if let Some(key_def) = soundpack.definitions.get(*keyboard_key) {
-                let converted_mappings: Vec<(f64, f64)> = key_def.timing
+                let converted_mappings: Vec<(f64, f64)> = key_def
+                    .timing
                     .iter()
                     .map(|pair| (pair[0] as f64, pair[1] as f64))
                     .collect();
@@ -862,8 +878,7 @@ fn capture_soundpack_loading_error(soundpack_id: &str, error: &str) {
             soundpack_type: determine_soundpack_type(soundpack_id),
             folder_path: soundpack_id.to_string(), // Add folder_path for error entries
             last_modified: 0,
-            last_accessed: std::time::SystemTime
-                ::now()
+            last_accessed: std::time::SystemTime::now()
                 .duration_since(std::time::SystemTime::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
@@ -874,9 +889,14 @@ fn capture_soundpack_loading_error(soundpack_id: &str, error: &str) {
             last_error: Some(error.to_string()),
         };
 
-        cache.soundpacks.insert(soundpack_id.to_string(), error_metadata);
+        cache
+            .soundpacks
+            .insert(soundpack_id.to_string(), error_metadata);
     }
 
     cache.save();
-    println!("💾 Updated cache with error information for {}", soundpack_id);
+    println!(
+        "💾 Updated cache with error information for {}",
+        soundpack_id
+    );
 }
