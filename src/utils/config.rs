@@ -38,7 +38,7 @@ pub fn create_config_updater(
 
         // Update the signal through RefCell
         signal_ref.borrow_mut().set(new_config);
-        println!("[config_utils] Config updated");
+        log::info!("[config_utils] Config updated");
     })
 }
 

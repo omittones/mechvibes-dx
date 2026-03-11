@@ -350,7 +350,7 @@ fn ThemeCreatorModal(props: ThemeCreatorModalProps) -> Element {
                 update_themes(
                     Box::new(move |themes: &mut ThemesConfig| {
                         if let Err(e) = themes.update_theme(&editing_id, name, "".to_string(), css) {
-                            eprintln!("Failed to update theme: {}", e);
+                            log::error!("Failed to update theme: {}", e);
                         }
                     })
                 );
@@ -359,7 +359,7 @@ fn ThemeCreatorModal(props: ThemeCreatorModalProps) -> Element {
                 update_themes(
                     Box::new(move |themes: &mut ThemesConfig| {
                         if let Err(e) = themes.add_theme(name, "".to_string(), css) {
-                            eprintln!("Failed to create theme: {}", e);
+                            log::error!("Failed to create theme: {}", e);
                         }
                     })
                 );

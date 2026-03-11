@@ -49,12 +49,12 @@ impl AudioContext {
                         match rodio::OutputStream::try_from_device(&device) {
                             Ok((stream, handle)) => (stream, handle),
                             Err(e) => {
-                                eprintln!(
+                                log::error!(
                                     "❌ Failed to create stream from selected device {}: {}",
                                     device_id,
                                     e
                                 );
-                                eprintln!("🔄 Falling back to default device...");
+                                log::error!("🔄 Falling back to default device...");
                                 rodio::OutputStream
                                     ::try_default()
                                     .expect("Failed to create default audio output stream")
@@ -62,13 +62,13 @@ impl AudioContext {
                         }
                     }
                     Ok(None) => {
-                        eprintln!("❌ Selected audio device {} not found, using default", device_id);
+                        log::error!("❌ Selected audio device {} not found, using default", device_id);
                         rodio::OutputStream
                             ::try_default()
                             .expect("Failed to create default audio output stream")
                     }
                     Err(e) => {
-                        eprintln!("❌ Error accessing selected device {}: {}", device_id, e);
+                        log::error!("❌ Error accessing selected device {}: {}", device_id, e);
                         rodio::OutputStream
                             ::try_default()
                             .expect("Failed to create default audio output stream")
@@ -106,7 +106,7 @@ impl AudioContext {
         // Load soundpack from config
         match super::soundpack_loader::load_soundpack(&context) {
             Ok(_) => {}
-            Err(e) => eprintln!("❌ Failed to load initial soundpack: {}", e),
+            Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),
         }
 
         context
@@ -174,17 +174,17 @@ impl AudioContext {
                         match rodio::OutputStream::try_from_device(&device) {
                             Ok((stream, handle)) => (stream, handle),
                             Err(e) => {
-                                eprintln!("❌ Failed to create stream from device {}: {}", id, e);
+                                log::error!("❌ Failed to create stream from device {}: {}", id, e);
                                 return Err(format!("Failed to use device: {}", e));
                             }
                         }
                     }
                     Ok(None) => {
-                        eprintln!("❌ Device {} not found", id);
+                        log::error!("❌ Device {} not found", id);
                         return Err(format!("Device not found: {}", id));
                     }
                     Err(e) => {
-                        eprintln!("❌ Error accessing device {}: {}", id, e);
+                        log::error!("❌ Error accessing device {}: {}", id, e);
                         return Err(format!("Error accessing device: {}", e));
                     }
                 }
@@ -219,7 +219,7 @@ impl AudioContext {
         MOUSE_AUDIO_VOLUME.get_or_init(|| Mutex::new(config.mouse_volume)); // Load soundpack from config
         match super::soundpack_loader::load_soundpack(&context) {
             Ok(_) => {}
-            Err(e) => eprintln!("❌ Failed to load initial soundpack: {}", e),
+            Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),
         }
 
         Ok(context)

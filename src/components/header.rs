@@ -24,7 +24,7 @@ pub fn Header() -> Element {
 
     // Use effect to inject fonts and dynamic CSS
     use_effect(move || {
-        println!("🎨 Header: Injecting fonts and dynamic CSS");
+        log::info!("🎨 Header: Injecting fonts and dynamic CSS");
         let custom_css = config().custom_css.clone();
 
         // Create font-face declarations using Manganis assets

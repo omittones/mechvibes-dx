@@ -14,7 +14,7 @@ pub fn start_evdev_keyboard_listener(
     thread::spawn(move || {
         use evdev::{Device, EventType, Key};
 
-        println!("🔍 [evdev] Starting Linux keyboard listener (Wayland/X11 compatible)");
+        log::debug!("🔍 [evdev] Starting Linux keyboard listener (Wayland/X11 compatible)");
 
         // Track modifier keys for hotkey detection
         let mut ctrl_pressed = false;
@@ -28,7 +28,7 @@ pub fn start_evdev_keyboard_listener(
                 for (path, mut device) in devices {
                     // Check if device has keyboard capabilities
                     if device.supported_keys().is_some() {
-                        println!(
+                        log::info!(
                             "🔍 [evdev] Found keyboard device: {:?} - {}",
                             path.display(),
                             device.name().unwrap_or("Unknown")
@@ -48,8 +48,8 @@ pub fn start_evdev_keyboard_listener(
                 }
             }
             Err(e) => {
-                eprintln!("❌ [evdev] Failed to enumerate devices: {}", e);
-                eprintln!(
+                log::error!("❌ [evdev] Failed to enumerate devices: {}", e);
+                log::error!(
                     "💡 [evdev] Make sure you're in the 'input' group: sudo usermod -a -G input $USER"
                 );
                 return;
@@ -57,12 +57,12 @@ pub fn start_evdev_keyboard_listener(
         }
 
         if keyboards.is_empty() {
-            eprintln!("❌ [evdev] No keyboard devices found!");
-            eprintln!("💡 [evdev] Make sure you have permission to access /dev/input/event*");
+            log::error!("❌ [evdev] No keyboard devices found!");
+            log::error!("💡 [evdev] Make sure you have permission to access /dev/input/event*");
             return;
         }
 
-        println!(
+        log::info!(
             "🔍 [evdev] Monitoring {} keyboard device(s)",
             keyboards.len()
         );
@@ -93,7 +93,7 @@ pub fn start_evdev_keyboard_listener(
                                                 "KeyM" => {
                                                     // Check for Ctrl+Alt+M hotkey combination
                                                     if ctrl_pressed && alt_pressed {
-                                                        println!(
+                                                        log::info!(
                                                             "🔥 [evdev] Hotkey detected: Ctrl+Alt+M - Toggling global sound"
                                                         );
                                                         let _ = hotkey_tx
@@ -133,7 +133,7 @@ pub fn start_evdev_keyboard_listener(
                         // No events available, this is normal
                     }
                     Err(e) => {
-                        eerror!("⚠️[evdev] Error fetching events: {}", e);
+                        log::error!("⚠️[evdev] Error fetching events: {}", e);
                     }
                 }
             }

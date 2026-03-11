@@ -1,10 +1,10 @@
+use crate::state::app::use_state_trigger;
 use crate::state::paths;
 use crate::state::soundpack::SoundpackMetadata;
-use crate::state::{ app::use_state_trigger };
-use crate::utils::path::{ open_path, directory_exists };
+use crate::utils::path::{directory_exists, open_path};
 use dioxus::document::eval;
 use dioxus::prelude::*;
-use lucide_dioxus::{ FolderOpen, Music, Plus, RefreshCw, Trash };
+use lucide_dioxus::{FolderOpen, Music, Plus, RefreshCw, Trash};
 use std::sync::Arc;
 
 use super::ConfirmDeleteModal;
@@ -20,14 +20,17 @@ fn open_soundpack_folder(soundpack_id: &str) -> Result<(), String> {
     let normalized_path = PathBuf::from(&soundpack_path);
     let normalized_str = normalized_path.to_string_lossy().to_string();
 
-    println!("🔍 Opening soundpack folder:");
-    println!("   Soundpack ID: {}", soundpack_id);
-    println!("   Resolved path: {}", soundpack_path);
-    println!("   Normalized path: {}", normalized_str);
+    log::debug!("🔍 Opening soundpack folder:");
+    log::info!("Soundpack ID: {}", soundpack_id);
+    log::info!("Resolved path: {}", soundpack_path);
+    log::info!("Normalized path: {}", normalized_str);
 
     // Check if path exists
     if !normalized_path.exists() {
-        return Err(format!("Soundpack folder does not exist: {}", normalized_str));
+        return Err(format!(
+            "Soundpack folder does not exist: {}",
+            normalized_str
+        ));
     }
 
     open_path(&normalized_str).map_err(|e| format!("Failed to open soundpack folder: {}", e))
@@ -43,11 +46,10 @@ fn delete_soundpack(soundpack_id: &str) -> Result<(), String> {
     }
 
     // Remove the entire directory
-    std::fs
-        ::remove_dir_all(&soundpack_path)
+    std::fs::remove_dir_all(&soundpack_path)
         .map_err(|e| format!("Failed to delete soundpack directory: {}", e))?;
 
-    println!("🗑️ Successfully deleted soundpack: {}", soundpack_id);
+    log::info!("🗑️ Successfully deleted soundpack: {}", soundpack_id);
     Ok(())
 }
 
@@ -55,7 +57,7 @@ fn delete_soundpack(soundpack_id: &str) -> Result<(), String> {
 pub fn SoundpackTable(
     soundpacks: Vec<SoundpackMetadata>,
     soundpack_type: &'static str,
-    on_add_click: Option<EventHandler<MouseEvent>>
+    on_add_click: Option<EventHandler<MouseEvent>>,
 ) -> Element {
     // Search state
     let mut search_query = use_signal(String::new);
@@ -73,12 +75,16 @@ pub fn SoundpackTable(
         soundpacks
             .iter()
             .filter(|pack| {
-                pack.name.to_lowercase().contains(&query) ||
-                    pack.id.to_lowercase().contains(&query) ||
-                    pack.author
+                pack.name.to_lowercase().contains(&query)
+                    || pack.id.to_lowercase().contains(&query)
+                    || pack
+                        .author
                         .as_ref()
-                        .map_or(false, |author| author.to_lowercase().contains(&query)) ||
-                    pack.tags.iter().any(|tag| tag.to_lowercase().contains(&query))
+                        .map_or(false, |author| author.to_lowercase().contains(&query))
+                    || pack
+                        .tags
+                        .iter()
+                        .any(|tag| tag.to_lowercase().contains(&query))
             })
             .cloned()
             .collect()
@@ -92,7 +98,7 @@ pub fn SoundpackTable(
         Callback::new(move |_| {
             // Prevent multiple concurrent refreshes
             if refreshing_soundpacks() {
-                println!("🔄 Refresh already in progress, skipping...");
+                log::debug!("🔄 Refresh already in progress, skipping...");
                 return;
             }
 
@@ -102,7 +108,7 @@ pub fn SoundpackTable(
 
             spawn(async move {
                 refreshing_soundpacks.set(true);
-                println!("🔄 Refreshing soundpack cache...");
+                log::debug!("🔄 Refreshing soundpack cache...");
 
                 // Reload soundpacks in audio context
                 crate::state::app::reload_current_soundpacks(&audio_ctx);
@@ -110,7 +116,7 @@ pub fn SoundpackTable(
                 // Trigger state update to refresh UI
                 state_trigger.call(());
 
-                println!("✅ Soundpack cache refreshed");
+                log::info!("✅ Soundpack cache refreshed");
                 refreshing_soundpacks.set(false);
             });
         })
@@ -186,10 +192,10 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
             let soundpack_id = soundpack_id.clone();
             let soundpack_name = soundpack_name.clone();
             spawn(async move {
-                println!("🔍 Soundpack info:");
-                println!("   Name: {}", soundpack_name);
-                println!("   ID: {}", soundpack_id);
-                println!("   Folder path: {}", folder_path);
+                log::debug!("🔍 Soundpack info:");
+                log::info!("Name: {}", soundpack_name);
+                log::info!("ID: {}", soundpack_id);
+                log::info!("Folder path: {}", folder_path);
 
                 // Use folder_path if not empty, otherwise fall back to id
                 let path_to_use = if !folder_path.is_empty() {
@@ -199,10 +205,15 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
                 };
 
                 match open_soundpack_folder(&path_to_use) {
-                    Ok(_) =>
-                        println!("✅ Successfully opened folder for soundpack: {}", soundpack_name),
-                    Err(e) =>
-                        eprintln!("❌ Failed to open folder for soundpack {}: {}", soundpack_name, e),
+                    Ok(_) => log::info!(
+                        "✅ Successfully opened folder for soundpack: {}",
+                        soundpack_name
+                    ),
+                    Err(e) => log::error!(
+                        "❌ Failed to open folder for soundpack {}: {}",
+                        soundpack_name,
+                        e
+                    ),
                 }
             });
         }
@@ -218,13 +229,13 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
             spawn(async move {
                 match delete_soundpack(&soundpack_id) {
                     Ok(_) => {
-                        println!("✅ Successfully deleted soundpack: {}", soundpack_id);
+                        log::info!("✅ Successfully deleted soundpack: {}", soundpack_id);
                         // The modal will close automatically due to form method="dialog"
                         // Trigger state refresh to update the UI
                         trigger.call(());
                     }
                     Err(e) => {
-                        eprintln!("❌ Failed to delete soundpack {}: {}", soundpack_id, e);
+                        log::error!("❌ Failed to delete soundpack {}: {}", soundpack_id, e);
                         // Could show an error modal here if needed
                     }
                 }

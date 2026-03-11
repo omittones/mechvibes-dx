@@ -1,5 +1,5 @@
 /// Global input manager to handle input channels between main and UI
-use std::sync::{ mpsc, Arc, Mutex, OnceLock };
+use std::sync::{Arc, Mutex, OnceLock, mpsc};
 
 /// Static global holder for input channels
 static INPUT_CHANNELS: OnceLock<InputChannels> = OnceLock::new();
@@ -24,7 +24,7 @@ pub fn init_input_channels(
     hotkey_rx: mpsc::Receiver<String>,
     keyboard_tx: mpsc::Sender<String>,
     mouse_tx: mpsc::Sender<String>,
-    hotkey_tx: mpsc::Sender<String>
+    hotkey_tx: mpsc::Sender<String>,
 ) {
     let channels = InputChannels {
         keyboard_rx: Arc::new(Mutex::new(keyboard_rx)),
@@ -40,7 +40,9 @@ pub fn init_input_channels(
 
 /// Get input channels (called from UI)
 pub fn get_input_channels() -> &'static InputChannels {
-    INPUT_CHANNELS.get().expect("Input channels not initialized")
+    INPUT_CHANNELS
+        .get()
+        .expect("Input channels not initialized")
 }
 
 /// Initialize window focus state (called from main)
@@ -55,13 +57,19 @@ pub fn init_window_focus_state_with_value(focused: bool) {
 
 /// Get window focus state (called from UI)
 pub fn get_window_focus_state() -> Arc<Mutex<bool>> {
-    WINDOW_FOCUS_STATE.get().expect("Window focus state not initialized").clone()
+    WINDOW_FOCUS_STATE
+        .get()
+        .expect("Window focus state not initialized")
+        .clone()
 }
 
 /// Set window focus state (called from UI event handler)
 pub fn set_window_focus(focused: bool) {
     if let Some(state) = WINDOW_FOCUS_STATE.get() {
         *state.lock().unwrap() = focused;
-        println!("🔍 Window focus state changed: {}", if focused { "FOCUSED" } else { "UNFOCUSED" });
+        log::debug!(
+            "🔍 Window focus state changed: {}",
+            if focused { "FOCUSED" } else { "UNFOCUSED" }
+        );
     }
 }

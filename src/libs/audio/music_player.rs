@@ -71,7 +71,7 @@ impl RodioMusicPlayer {
                                 &url
                             ).await
                         {
-                            eprintln!("Failed to play music: {}", e);
+                            log::error!("Failed to play music: {}", e);
                         }
                     }
                     MusicCommand::Pause => {

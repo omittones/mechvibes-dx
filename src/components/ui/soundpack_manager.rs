@@ -1,6 +1,6 @@
-use crate::state::{ app::use_app_state };
+use crate::state::app::use_app_state;
 use dioxus::prelude::*;
-use lucide_dioxus::{ ExternalLink, FolderOpen, RefreshCcw };
+use lucide_dioxus::{ExternalLink, FolderOpen, RefreshCcw};
 use std::sync::Arc;
 
 #[component]
@@ -16,11 +16,11 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
         Callback::new(move |_| {
             // Prevent multiple concurrent refreshes
             if refreshing_soundpacks() {
-                println!("🔄 Refresh already in progress, skipping...");
+                log::debug!("🔄 Refresh already in progress, skipping...");
                 return;
             }
 
-            println!("🔄 Refresh button clicked!");
+            log::debug!("🔄 Refresh button clicked!");
             // Set loading state to true
             refreshing_soundpacks.set(true);
             // Clone necessary variables for the async task
@@ -35,23 +35,23 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
                 use std::time::Duration;
 
                 Delay::new(Duration::from_millis(100)).await;
-                println!("🔄 Starting soundpack refresh operation...");
+                log::debug!("🔄 Starting soundpack refresh operation...");
 
                 // Use the state trigger to refresh cache and update UI
                 // This will automatically update the count as well
-                println!("🔄 Calling state trigger...");
+                log::debug!("🔄 Calling state trigger...");
                 trigger.call(());
-                println!("🔄 State trigger called successfully");
+                log::debug!("🔄 State trigger called successfully");
 
                 // Reload current soundpacks to apply any changes
-                println!("🔄 Reloading current soundpacks...");
+                log::debug!("🔄 Reloading current soundpacks...");
                 crate::state::app::reload_current_soundpacks(&audio_ctx_clone);
 
                 // Add another small delay before changing the loading state back
                 Delay::new(Duration::from_millis(100)).await;
                 // Reset loading state
                 refreshing_signal.set(false);
-                println!("✅ Soundpack refresh complete");
+                log::info!("✅ Soundpack refresh complete");
             });
         })
     };

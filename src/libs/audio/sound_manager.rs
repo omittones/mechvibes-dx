@@ -7,11 +7,7 @@ use crate::state::config::AppConfig;
 
 impl AudioContext {
     pub fn play_key_event_sound(&self, key: &str, is_keydown: bool) {
-        // println!(
-        //     "⌨️ Key event received: {} ({})",
-        //     key,
-        //     if is_keydown { "down" } else { "up" }
-        // );
+        
 
         // Check enable_sound from config before playing audio
         let config = AppConfig::load();
@@ -43,7 +39,7 @@ impl AudioContext {
 
                 // Debug logging for problematic keys
                 if start < 0.0 || duration <= 0.0 || duration > 10000.0 {
-                    eprintln!(
+                    log::error!(
                         "⚠️ Suspicious mapping for key '{}' ({}): start={:.3}ms, end={:.3}ms, duration={:.3}ms (raw: [{}, {}])",
                         key,
                         if is_keydown {
@@ -73,7 +69,7 @@ impl AudioContext {
 
                 // Debug logging for problematic keys
                 if start < 0.0 || duration <= 0.0 || duration > 10000.0 {
-                    eprintln!(
+                    log::error!(
                         "⚠️ Suspicious mapping for key '{}': start={:.3}ms, end={:.3}ms, duration={:.3}ms (raw: [{}, {}])",
                         key,
                         start,
@@ -87,7 +83,7 @@ impl AudioContext {
                 (start, end)
             }
             Some(arr) => {
-                eprintln!(
+                log::error!(
                     "Invalid mapping for key '{}': expected 1-2 elements, got {}",
                     key,
                     arr.len()
@@ -115,7 +111,7 @@ impl AudioContext {
 
             // Validate input parameters
             if start < 0.0 || duration <= 0.0 || end <= start {
-                eprintln!(
+                log::error!(
                     "❌ Invalid time parameters for key '{}': start={:.3}ms, end={:.3}ms, duration={:.3}ms",
                     key,
                     start,
@@ -126,7 +122,7 @@ impl AudioContext {
             }
             // Use epsilon tolerance for floating point comparison (1ms tolerance)
             const EPSILON: f32 = 1.0; // 1ms tolerance
-            // eprintln!(
+            // log::error!(
             //     "🔍 Playing sound for key '{}': start={:.3}ms, end={:.3}ms, duration={:.3}ms (total duration: {:.3}ms)",
             //     key,
             //     start,
@@ -137,7 +133,7 @@ impl AudioContext {
 
             // Check if start time exceeds audio duration - this is an error condition
             if start >= total_duration + EPSILON {
-                eprintln!(
+                log::error!(
                     "❌ TIMING ERROR: Start time {:.3}ms exceeds audio duration {:.3}ms for key '{}'",
                     start,
                     total_duration,
@@ -148,7 +144,7 @@ impl AudioContext {
 
             // Check if end time exceeds audio duration
             if end > total_duration + EPSILON {
-                eprintln!(
+                log::error!(
                     "❌ TIMING ERROR: Audio segment {:.3}ms-{:.3}ms exceeds duration {:.3}ms for key '{}'",
                     start,
                     end,
@@ -198,14 +194,14 @@ impl AudioContext {
 
             // Final validation before extracting samples
             if start_sample >= end_sample || start_sample >= samples.len() {
-                eprintln!(
+                log::error!(
                     "❌ INTERNAL ERROR: Invalid sample range for key '{}': {}..{} (max {})",
                     key,
                     start_sample,
                     end_sample,
                     samples.len()
                 );
-                eprintln!(
+                log::error!(
                     "   Audio: {:.3}ms, Channels: {}, Rate: {}",
                     total_duration,
                     channels,
@@ -229,7 +225,7 @@ impl AudioContext {
                 );
             }
         } else {
-            eprintln!("❌ No keyboard PCM buffer available");
+            log::error!("❌ No keyboard PCM buffer available");
         }
     }
 
@@ -300,7 +296,7 @@ impl AudioContext {
                 (start, duration)
             }
             Some(arr) => {
-                eprintln!(
+                log::error!(
                     "Invalid mapping for mouse button '{}': expected 1-2 elements, got {}",
                     button,
                     arr.len()
@@ -332,7 +328,7 @@ impl AudioContext {
 
             // Validate input parameters
             if start < 0.0 || duration <= 0.0 {
-                eprintln!(
+                log::error!(
                     "❌ Invalid time parameters for mouse button '{}': start={:.3}ms, duration={:.3}ms",
                     button,
                     start,
@@ -344,7 +340,7 @@ impl AudioContext {
 
             // Check if start time exceeds audio duration - this is an error condition
             if start >= total_duration + EPSILON {
-                eprintln!(
+                log::error!(
                     "❌ TIMING ERROR: Start time {:.3}ms exceeds audio duration {:.3}ms for mouse button '{}'",
                     start,
                     total_duration,
@@ -355,7 +351,7 @@ impl AudioContext {
 
             // Check if start + duration exceeds audio duration
             if start + duration > total_duration + EPSILON {
-                eprintln!(
+                log::error!(
                     "❌ TIMING ERROR: Audio segment {:.3}ms-{:.3}ms exceeds duration {:.3}ms for mouse button '{}'",
                     start,
                     start + duration,
@@ -378,25 +374,25 @@ impl AudioContext {
 
             // Validate sample range
             if end_sample > samples.len() {
-                eprintln!("❌ TIMING ERROR: Audio segment exceeds sample buffer for mouse button '{}'", button);
-                eprintln!(
+                log::error!("❌ TIMING ERROR: Audio segment exceeds sample buffer for mouse button '{}'", button);
+                log::error!(
                     "   Requested samples: {}..{}, Available: {} samples",
                     start_sample,
                     end_sample,
                     samples.len()
                 );
-                eprintln!("🔧 SOLUTION: Regenerate the soundpack to fix timing issues.");
+                log::error!("🔧 SOLUTION: Regenerate the soundpack to fix timing issues.");
                 return;
             } // Final validation before extracting samples
             if start_sample >= end_sample || start_sample >= samples.len() {
-                eprintln!(
+                log::error!(
                     "❌ INTERNAL ERROR: Invalid sample range for mouse button '{}': {}..{} (max {})",
                     button,
                     start_sample,
                     end_sample,
                     samples.len()
                 );
-                eprintln!(
+                log::error!(
                     "   Audio: {:.3}ms, Channels: {}, Rate: {}",
                     total_duration,
                     channels,
@@ -420,7 +416,7 @@ impl AudioContext {
                 );
             }
         } else {
-            eprintln!("❌ No mouse PCM buffer available");
+            log::error!("❌ No mouse PCM buffer available");
         }
     }
 

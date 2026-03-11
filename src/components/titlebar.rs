@@ -1,9 +1,9 @@
 use crate::libs::window_manager::WINDOW_MANAGER;
-use crate::utils::constants::APP_NAME;
 use crate::state::app::use_update_info;
+use crate::utils::constants::APP_NAME;
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
-use lucide_dioxus::{ Minus, X, EyeClosed, Download };
+use lucide_dioxus::{Download, EyeClosed, Minus, X};
 
 /// A custom title bar component that allows for window dragging and includes minimize/close buttons
 #[component]
@@ -23,7 +23,7 @@ pub fn TitleBar() -> Element {
     let minimize_to_tray = move |_| {
         // Hide the window to system tray
         WINDOW_MANAGER.hide();
-        println!("🔽 Window minimized to system tray");
+        log::info!("🔽 Window minimized to system tray");
     };
 
     // Function to close application
@@ -57,21 +57,21 @@ pub fn TitleBar() -> Element {
           // Update notification (separate from draggable area)
           if let Some(update) = update_info.clone() {
             if update.update_available {
-              div { 
+              div {
                 class: "tooltip tooltip-bottom ml-2",
                 "data-tip": "New version {update.latest_version} available!",
                 if let Some(url) = &update.download_url {
-                  button { 
+                  button {
                     class: "btn btn-success btn-xs",
                     onclick: {
                       let url = url.clone();
                       move |_| {
-                        println!("🔗 Opening update URL: {}", url);
+                        log::info!("🔗 Opening update URL: {}", url);
                         // Open URL in default browser
                         if let Err(e) = open::that(&url) {
-                          eprintln!("Failed to open URL: {}", e);
+                          log::error!("Failed to open URL: {}", e);
                         } else {
-                          println!("✅ Successfully opened URL: {}", url);
+                          log::info!("✅ Successfully opened URL: {}", url);
                         }
                       }
                     },

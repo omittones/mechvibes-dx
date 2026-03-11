@@ -149,14 +149,15 @@ impl SoundpackCache {
         let cache =
             match data::load_json_from_file::<SoundpackCache>(std::path::Path::new(&cache_file)) {
                 Ok(cache) => {
-                    println!(
-                        "📦 Loaded soundpack metadata cache with {} entries",
+                    log::info!(
+                        "📦 Loaded soundpack metadata cache {} with {} entries",
+                        cache_file,
                         cache.soundpacks.len()
                     );
                     cache
                 }
                 Err(e) => {
-                    eerror!("⚠️ Failed to load cache file: {}", e);
+                    log::error!("⚠️ Failed to load cache file: {}", e);
                     Self::new()
                 }
             };
@@ -180,26 +181,28 @@ impl SoundpackCache {
         // Ensure parent directory exists
         if let Some(parent) = Path::new(&cache_file).parent() {
             if let Err(e) = path::ensure_directory_exists(parent) {
-                eerror!("⚠️ Failed to create cache directory: {}", e);
+                log::error!("⚠️ Failed to create cache directory: {}", e);
                 return;
             }
         }
 
         match data::save_json_to_file(self, std::path::Path::new(&cache_file)) {
-            Ok(_) => println!(
+            Ok(_) => log::info!(
                 "💾 Saved soundpack metadata cache with {} entries",
                 self.soundpacks.len()
             ),
-            Err(e) => eerror!("⚠️ Failed to save metadata cache: {}", e),
+            Err(e) => log::error!("⚠️ Failed to save metadata cache: {}", e),
         }
     }
 
     // Add or update soundpack metadata
     pub fn add_soundpack(&mut self, metadata: SoundpackMetadata) {
         self.soundpacks.insert(metadata.id.clone(), metadata);
-    } // Refresh cache by scanning soundpacks directory
+    }
+
+    // Refresh cache by scanning soundpacks directory
     pub fn refresh_from_directory(&mut self) {
-        info!("📂 Scanning soundpacks directories...");
+        log::info!("📂 Scanning soundpacks directories...");
 
         self.soundpacks.clear(); // Clear all existing entries
 
@@ -207,7 +210,7 @@ impl SoundpackCache {
         let builtin_soundpacks_dir = paths::soundpacks::get_builtin_soundpacks_dir()
             .to_string_lossy()
             .to_string();
-        println!(
+        log::info!(
             "📂 Scanning built-in soundpacks in: {}",
             builtin_soundpacks_dir
         );
@@ -218,7 +221,7 @@ impl SoundpackCache {
         let custom_soundpacks_dir = paths::soundpacks::get_custom_soundpacks_dir()
             .to_string_lossy()
             .to_string();
-        println!(
+        log::info!(
             "📂 Scanning custom soundpacks in: {}",
             custom_soundpacks_dir
         );
@@ -233,7 +236,7 @@ impl SoundpackCache {
             .unwrap_or_default()
             .as_secs();
 
-        println!("📦 Loaded {} soundpacks metadata", self.soundpacks.len());
+        log::info!("📦 Loaded {} soundpacks metadata", self.soundpacks.len());
     }
 
     // Update count based on current soundpacks in cache
@@ -254,15 +257,16 @@ impl SoundpackCache {
         self.count.keyboard = keyboard_count;
         self.count.mouse = mouse_count;
 
-        println!(
+        log::info!(
             "📊 Updated count: {} keyboard, {} mouse soundpacks",
-            keyboard_count, mouse_count
+            keyboard_count,
+            mouse_count
         );
     }
 
     fn scan_soundpack_type(&mut self, soundpacks_dir: &str, is_mouse: bool) {
         let type_dir = std::path::Path::new(soundpacks_dir);
-        println!(
+        log::info!(
             "📂 [CACHE DEBUG] Scanning {} soundpacks in: {}",
             if is_mouse { "mouse" } else { "keyboard" },
             type_dir.display()
@@ -279,7 +283,7 @@ impl SoundpackCache {
                             if is_mouse { "mouse" } else { "keyboard" },
                             soundpack_name
                         );
-                        println!(
+                        log::info!(
                             "🔍 [CACHE DEBUG] Processing soundpack {}",
                             full_soundpack_id
                         );
@@ -289,16 +293,17 @@ impl SoundpackCache {
                             &full_soundpack_id,
                         ) {
                             Ok(metadata) => {
-                                println!(
+                                log::info!(
                                     "✅ [CACHE DEBUG] Successfully loaded metadata for: {}",
                                     full_soundpack_id
                                 );
                                 self.soundpacks.insert(full_soundpack_id, metadata);
                             }
                             Err(e) => {
-                                println!(
+                                log::info!(
                                     "❌ [CACHE DEBUG] Failed to load metadata for {}: {}",
-                                    soundpack_name, e
+                                    soundpack_name,
+                                    e
                                 );
                                 self.insert_error_metadata(
                                     &full_soundpack_id,
@@ -311,13 +316,13 @@ impl SoundpackCache {
                     }
                 }
             } else {
-                println!(
+                log::info!(
                     "⚠️ [CACHE DEBUG] Failed to read directory: {}",
                     type_dir.display()
                 );
             }
         } else {
-            println!(
+            log::info!(
                 "⚠️ [CACHE DEBUG] Directory does not exist: {}",
                 type_dir.display()
             );

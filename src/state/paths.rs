@@ -23,18 +23,18 @@ fn get_app_root() -> &'static PathBuf {
                 if exe_path_str.contains("target\\dx\\") || exe_path_str.contains("target/dx/") {
                     // In dev mode, use current working directory (project root)
                     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    info!("📂 App root (dev mode - from cwd): {}", cwd.display());
+                    log::info!("📂 App root (dev mode - from cwd): {}", cwd.display());
                     return cwd;
                 }
 
-                info!("📂 App root (from exe): {}", exe_dir.display());
+                log::info!("📂 App root (from exe): {}", exe_dir.display());
                 return exe_dir.to_path_buf();
             }
         }
 
         // Fallback to current working directory (for development)
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        info!("📂 App root (fallback - from cwd): {}", cwd.display());
+        log::info!("📂 App root (fallback - from cwd): {}", cwd.display());
         cwd
     })
 }

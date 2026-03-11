@@ -25,7 +25,7 @@ pub fn Layout() -> Element {
 
     // Convert theme to DaisyUI theme name
     let daisy_theme = theme().to_daisy_theme();
-    println!("🎨 Layout rendering with theme: {:?} -> DaisyUI: {}", theme(), daisy_theme);
+    log::info!("🎨 Layout rendering with theme: {:?} -> DaisyUI: {}", theme(), daisy_theme);
 
     // Get background customization settings (reactive to config changes)
     let background_style = use_memo(move || {

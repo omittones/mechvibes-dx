@@ -1,5 +1,3 @@
-use log::error;
-
 use crate::state::config::AppConfig;
 use crate::state::paths;
 use crate::state::soundpack::SoundPack;
@@ -38,11 +36,11 @@ pub fn load_keyboard_soundpack_with_cache_control(
 ) -> Result<(), String> {
     // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
-        error!("⚠️Skipping keyboard soundpack loading: empty soundpack ID");
+        log::error!("⚠️Skipping keyboard soundpack loading: empty soundpack ID");
         return Ok(()); // Return success to avoid error handling
     }
 
-    println!("🎹 Loading keyboard soundpack: {}", soundpack_id);
+    log::info!("🎹 Loading keyboard soundpack: {}", soundpack_id);
     match load_keyboard_soundpack_optimized(context, soundpack_id, update_cache_on_error) {
         Ok(()) => Ok(()),
         Err(e) => {
@@ -64,11 +62,11 @@ pub fn load_mouse_soundpack_with_cache_control(
 ) -> Result<(), String> {
     // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
-        error!("⚠️Skipping mouse soundpack loading: empty soundpack ID");
+        log::error!("⚠️Skipping mouse soundpack loading: empty soundpack ID");
         return Ok(()); // Return success to avoid error handling
     }
 
-    println!("🖱️ Loading mouse soundpack: {}", soundpack_id);
+    log::info!("🖱️ Loading mouse soundpack: {}", soundpack_id);
     match load_mouse_soundpack_optimized(context, soundpack_id, update_cache_on_error) {
         Ok(()) => Ok(()),
         Err(e) => {
@@ -389,7 +387,7 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
                 }
             }
             Err(e) => {
-                error!("⚠️[DEBUG] Decode error (continuing): {}", e);
+                log::error!("⚠️[DEBUG] Decode error (continuing): {}", e);
                 continue;
             }
         }
@@ -408,7 +406,7 @@ pub fn load_keyboard_soundpack_optimized(
     soundpack_id: &str,
     update_cache_on_error: bool,
 ) -> Result<(), String> {
-    info!("📂 Direct loading keyboard soundpack: {}", soundpack_id);
+    log::info!("📂 Direct loading keyboard soundpack: {}", soundpack_id);
 
     // Load soundpack directly from filesystem
     let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
@@ -448,7 +446,7 @@ pub fn load_keyboard_soundpack_optimized(
             cache.add_soundpack(metadata);
         }
         Err(e) => {
-            error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
+            log::error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
 
             // Only add error metadata to cache if requested (not during startup)
             if update_cache_on_error {
@@ -486,7 +484,7 @@ pub fn load_keyboard_soundpack_optimized(
     }
     cache.save();
 
-    println!(
+    log::info!(
         "✅ Successfully loaded keyboard soundpack: {} (direct from files)",
         soundpack.name
     );
@@ -499,7 +497,7 @@ pub fn load_mouse_soundpack_optimized(
     soundpack_id: &str,
     update_cache_on_error: bool,
 ) -> Result<(), String> {
-    info!("📂 Direct loading mouse soundpack: {}", soundpack_id);
+    log::info!("📂 Direct loading mouse soundpack: {}", soundpack_id);
 
     // Load soundpack directly from filesystem
     let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
@@ -533,7 +531,7 @@ pub fn load_mouse_soundpack_optimized(
             cache.add_soundpack(metadata);
         }
         Err(e) => {
-            error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
+            log::error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
 
             // Only add error metadata to cache if requested (not during startup)
             if update_cache_on_error {
@@ -571,7 +569,7 @@ pub fn load_mouse_soundpack_optimized(
     }
     cache.save();
 
-    println!(
+    log::info!(
         "✅ Successfully loaded mouse soundpack: {} (direct from files)",
         soundpack.name
     );
@@ -592,7 +590,7 @@ fn update_keyboard_context(
     // Update keyboard samples
     if let Ok(mut cached) = context.keyboard_samples.lock() {
         *cached = Some((audio_samples, channels, sample_rate));
-        println!("🎹 Updated keyboard samples: {} samples", sample_count);
+        log::info!("🎹 Updated keyboard samples: {} samples", sample_count);
     } else {
         return Err("Failed to acquire lock on keyboard_samples".to_string());
     }
@@ -610,7 +608,7 @@ fn update_keyboard_context(
             key_map.insert(key.clone(), converted_mappings);
         }
 
-        println!(
+        log::info!(
             "🗝️ Updated key mappings: {} -> {} keys",
             old_count,
             key_map.len()
@@ -624,7 +622,7 @@ fn update_keyboard_context(
         let old_sinks = sinks.len();
         sinks.clear();
         if old_sinks > 0 {
-            println!("🔇 Cleared {} active key sinks", old_sinks);
+            log::info!("🔇 Cleared {} active key sinks", old_sinks);
         }
     }
 
@@ -632,13 +630,14 @@ fn update_keyboard_context(
         let old_pressed = pressed.len();
         pressed.clear();
         if old_pressed > 0 {
-            println!("⌨️ Cleared {} pressed keys", old_pressed);
+            log::info!("⌨️ Cleared {} pressed keys", old_pressed);
         }
     }
 
-    println!(
+    log::info!(
         "✅ Successfully loaded keyboard soundpack: {} ({} key mappings) - Memory properly cleaned",
-        soundpack_name, key_mapping_count
+        soundpack_name,
+        key_mapping_count
     );
     Ok(())
 }
@@ -657,7 +656,7 @@ fn update_mouse_context(
     // Update mouse samples
     if let Ok(mut cached) = context.mouse_samples.lock() {
         *cached = Some((audio_samples, channels, sample_rate));
-        println!("🖱️ Updated mouse samples: {} samples", sample_count);
+        log::info!("🖱️ Updated mouse samples: {} samples", sample_count);
     } else {
         return Err("Failed to acquire lock on mouse_samples".to_string());
     }
@@ -675,7 +674,7 @@ fn update_mouse_context(
             mouse_map.insert(button.clone(), converted_mappings);
         }
 
-        println!(
+        log::info!(
             "🖱️ Updated mouse mappings: {} -> {} buttons",
             old_count,
             mouse_map.len()
@@ -689,7 +688,7 @@ fn update_mouse_context(
         let old_sinks = mouse_sinks.len();
         mouse_sinks.clear();
         if old_sinks > 0 {
-            println!("🔇 Cleared {} active mouse sinks", old_sinks);
+            log::info!("🔇 Cleared {} active mouse sinks", old_sinks);
         }
     }
 
@@ -697,13 +696,14 @@ fn update_mouse_context(
         let old_pressed = mouse_pressed.len();
         mouse_pressed.clear();
         if old_pressed > 0 {
-            println!("🖱️ Cleared {} pressed mouse buttons", old_pressed);
+            log::info!("🖱️ Cleared {} pressed mouse buttons", old_pressed);
         }
     }
 
-    println!(
+    log::info!(
         "✅ Successfully loaded mouse soundpack: {} ({} mouse mappings) - Memory properly cleaned",
-        soundpack_name, mouse_mapping_count
+        soundpack_name,
+        mouse_mapping_count
     );
     Ok(())
 }
@@ -818,7 +818,7 @@ fn create_mouse_mappings(
         }
     } else {
         // This is a keyboard soundpack, create default mouse mappings from keyboard sounds
-        println!(
+        log::info!(
             "🖱️ No mouse definitions found, creating default mouse mappings from keyboard sounds"
         );
 
@@ -854,11 +854,11 @@ fn create_mouse_mappings(
 fn capture_soundpack_loading_error(soundpack_id: &str, error: &str) {
     // Skip creating cache entries for empty soundpack IDs
     if soundpack_id.is_empty() {
-        error!("⚠️Skipping cache entry for empty soundpack ID: {}", error);
+        log::error!("⚠️Skipping cache entry for empty soundpack ID: {}", error);
         return;
     }
 
-    println!("📝 Capturing loading error for {}: {}", soundpack_id, error);
+    log::info!("📝 Capturing loading error for {}: {}", soundpack_id, error);
 
     let mut cache = SoundpackCache::load();
 
@@ -897,7 +897,7 @@ fn capture_soundpack_loading_error(soundpack_id: &str, error: &str) {
     }
 
     cache.save();
-    println!(
+    log::info!(
         "💾 Updated cache with error information for {}",
         soundpack_id
     );

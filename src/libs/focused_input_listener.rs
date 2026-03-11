@@ -1,6 +1,6 @@
-use device_query::{ DeviceQuery, DeviceState, Keycode };
+use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::collections::HashSet;
-use std::sync::{ mpsc::Sender, Arc, Mutex };
+use std::sync::{Arc, Mutex, mpsc::Sender};
 use std::thread;
 use std::time::Duration;
 
@@ -123,13 +123,10 @@ fn map_device_query_keycode(key: Keycode) -> &'static str {
 
 /// Start the focused keyboard listener (uses device_query polling)
 /// This listener is ONLY active when the window is focused
-pub fn start_focused_keyboard_listener(
-    keyboard_tx: Sender<String>,
-    is_focused: Arc<Mutex<bool>>,
-) {
+pub fn start_focused_keyboard_listener(keyboard_tx: Sender<String>, is_focused: Arc<Mutex<bool>>) {
     thread::spawn(move || {
-        println!("🎮 Starting focused keyboard listener (device_query polling)...");
-        
+        log::info!("🎮 Starting focused keyboard listener (device_query polling)...");
+
         let device_state = DeviceState::new();
         let mut prev_keys: HashSet<Keycode> = HashSet::new();
 
@@ -141,9 +138,11 @@ pub fn start_focused_keyboard_listener(
 
             // Log focus state every 5 seconds for debugging
             if last_focus_log.elapsed().as_secs() >= 5 {
-                println!("🔍 [device_query] Focus state: {}, polling active: {}",
+                log::debug!(
+                    "🔍 [device_query] Focus state: {}, polling active: {}",
                     if focused { "FOCUSED" } else { "UNFOCUSED" },
-                    focused);
+                    focused
+                );
                 last_focus_log = std::time::Instant::now();
             }
 
@@ -182,4 +181,3 @@ pub fn start_focused_keyboard_listener(
         }
     });
 }
-

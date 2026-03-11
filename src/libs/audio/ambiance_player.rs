@@ -83,7 +83,7 @@ impl RodioAmbiancePlayer {
                                     should_loop
                                 ).await
                             {
-                                eprintln!("❌ Failed to play ambiance sound {}: {}", sound_id, e);
+                                log::error!("❌ Failed to play ambiance sound {}: {}", sound_id, e);
                             }
                         }
                         AmbianceCommand::StopSound(sound_id) => {
@@ -191,7 +191,7 @@ impl RodioAmbiancePlayer {
             }
         }
 
-        println!("🎵 Started playing ambiance sound: {}", sound_id);
+        log::info!("🎵 Started playing ambiance sound: {}", sound_id);
         Ok(())
     }
 
@@ -203,7 +203,7 @@ impl RodioAmbiancePlayer {
         let mut sinks_lock = sinks.lock().unwrap();
         if let Some(sink) = sinks_lock.remove(sound_id) {
             sink.stop();
-            println!("🔇 Stopped ambiance sound: {}", sound_id);
+            log::info!("🔇 Stopped ambiance sound: {}", sound_id);
         }
         drop(sinks_lock);
 
@@ -226,7 +226,7 @@ impl RodioAmbiancePlayer {
         // Update status
         let mut status_lock = status.lock().unwrap();
         status_lock.playing_sounds.clear();
-        println!("🔇 Stopped all ambiance sounds");
+        log::info!("🔇 Stopped all ambiance sounds");
     }
 
     fn handle_pause_all_command(
@@ -242,7 +242,7 @@ impl RodioAmbiancePlayer {
         // Update status
         let mut status_lock = status.lock().unwrap();
         status_lock.is_playing = false;
-        println!("⏸️ Paused all ambiance sounds");
+        log::info!("⏸️ Paused all ambiance sounds");
     }
 
     fn handle_resume_all_command(
@@ -258,7 +258,7 @@ impl RodioAmbiancePlayer {
         // Update status
         let mut status_lock = status.lock().unwrap();
         status_lock.is_playing = true;
-        println!("▶️ Resumed all ambiance sounds");
+        log::info!("▶️ Resumed all ambiance sounds");
     }
 
     fn handle_set_sound_volume_command(

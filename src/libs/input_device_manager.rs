@@ -4,7 +4,6 @@ use std::ptr::null_mut;
 
 #[cfg(windows)]
 use std::os::windows::ffi::OsStringExt;
-
 #[cfg(windows)]
 use winapi::shared::ntdef::HANDLE;
 #[cfg(windows)]
@@ -112,78 +111,80 @@ impl InputDeviceManager {
     }
 
     #[cfg(windows)]
-    unsafe fn get_device_info(&self, device_handle: HANDLE) -> Result<InputDeviceInfo, String> { unsafe {
-        let mut name_size = 0u32;
+    unsafe fn get_device_info(&self, device_handle: HANDLE) -> Result<InputDeviceInfo, String> {
+        unsafe {
+            let mut name_size = 0u32;
 
-        // Get device name size
-        GetRawInputDeviceInfoW(
-            device_handle,
-            RIDI_DEVICENAME as u32,
-            null_mut(),
-            &mut name_size,
-        );
+            // Get device name size
+            GetRawInputDeviceInfoW(
+                device_handle,
+                RIDI_DEVICENAME as u32,
+                null_mut(),
+                &mut name_size,
+            );
 
-        if name_size == 0 {
-            return Err("Failed to get device name size".to_string());
-        }
-
-        // Get device name
-        let mut name_buffer = vec![0u16; name_size as usize];
-        if GetRawInputDeviceInfoW(
-            device_handle,
-            RIDI_DEVICENAME as u32,
-            name_buffer.as_mut_ptr() as *mut _,
-            &mut name_size,
-        ) == u32::MAX
-        {
-            return Err("Failed to get device name".to_string());
-        }
-
-        // Convert name to String
-        let name = String::from_utf16_lossy(&name_buffer[..(name_size as usize) - 1]);
-
-        // Get device info structure
-        let mut info_size = std::mem::size_of::<RID_DEVICE_INFO>() as u32;
-        let mut device_info = RID_DEVICE_INFO {
-            cbSize: info_size,
-            dwType: 0,
-            u: std::mem::zeroed(),
-        };
-
-        if GetRawInputDeviceInfoW(
-            device_handle,
-            RIDI_DEVICEINFO as u32,
-            &mut device_info as *mut _ as *mut _,
-            &mut info_size,
-        ) == u32::MAX
-        {
-            return Err("Failed to get device info".to_string());
-        }
-
-        let (device_type, vendor_id, product_id) = match device_info.dwType {
-            RIM_TYPEKEYBOARD => {
-                let kbd = unsafe { device_info.u.keyboard() };
-                (InputDeviceType::Keyboard, 0, kbd.dwKeyboardMode) // Using dwKeyboardMode as product_id
+            if name_size == 0 {
+                return Err("Failed to get device name size".to_string());
             }
-            RIM_TYPEMOUSE => {
-                let mouse = unsafe { device_info.u.mouse() };
-                (InputDeviceType::Mouse, 0, mouse.dwId)
+
+            // Get device name
+            let mut name_buffer = vec![0u16; name_size as usize];
+            if GetRawInputDeviceInfoW(
+                device_handle,
+                RIDI_DEVICENAME as u32,
+                name_buffer.as_mut_ptr() as *mut _,
+                &mut name_size,
+            ) == u32::MAX
+            {
+                return Err("Failed to get device name".to_string());
             }
-            _ => (InputDeviceType::Unknown, 0, 0),
-        };
 
-        // Create a unique ID from the device path
-        let device_id = format!("{:x}", self.hash_string(&name));
+            // Convert name to String
+            let name = String::from_utf16_lossy(&name_buffer[..(name_size as usize) - 1]);
 
-        Ok(InputDeviceInfo {
-            id: device_id,
-            name: self.extract_device_name(&name),
-            device_type,
-            vendor_id,
-            product_id: product_id as u16,
-            is_enabled: true, // Default to enabled
-        })
-    }}
+            // Get device info structure
+            let mut info_size = std::mem::size_of::<RID_DEVICE_INFO>() as u32;
+            let mut device_info = RID_DEVICE_INFO {
+                cbSize: info_size,
+                dwType: 0,
+                u: std::mem::zeroed(),
+            };
+
+            if GetRawInputDeviceInfoW(
+                device_handle,
+                RIDI_DEVICEINFO as u32,
+                &mut device_info as *mut _ as *mut _,
+                &mut info_size,
+            ) == u32::MAX
+            {
+                return Err("Failed to get device info".to_string());
+            }
+
+            let (device_type, vendor_id, product_id) = match device_info.dwType {
+                RIM_TYPEKEYBOARD => {
+                    let kbd = device_info.u.keyboard();
+                    (InputDeviceType::Keyboard, 0, kbd.dwKeyboardMode) // Using dwKeyboardMode as product_id
+                }
+                RIM_TYPEMOUSE => {
+                    let mouse = device_info.u.mouse();
+                    (InputDeviceType::Mouse, 0, mouse.dwId)
+                }
+                _ => (InputDeviceType::Unknown, 0, 0),
+            };
+
+            // Create a unique ID from the device path
+            let device_id = format!("{:x}", self.hash_string(&name));
+
+            Ok(InputDeviceInfo {
+                id: device_id,
+                name: self.extract_device_name(&name),
+                device_type,
+                vendor_id,
+                product_id: product_id as u16,
+                is_enabled: true, // Default to enabled
+            })
+        }
+    }
 
     #[cfg(not(windows))]
     fn add_default_devices(&mut self) {
@@ -265,7 +266,6 @@ impl InputDeviceManager {
 
     #[cfg(windows)]
     fn get_friendly_device_name(&self, device_path: &str) -> Result<String, String> {
-        
         use winapi::um::cfgmgr32::*;
 
         unsafe {

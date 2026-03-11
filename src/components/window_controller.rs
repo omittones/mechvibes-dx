@@ -1,6 +1,6 @@
-use crate::libs::tray::{ handle_tray_events, TrayManager, TrayMessage };
+use crate::libs::tray::{TrayManager, TrayMessage, handle_tray_events};
 use crate::libs::tray_service::TRAY_UPDATE_SERVICE;
-use crate::libs::window_manager::{ WindowAction, WINDOW_MANAGER };
+use crate::libs::window_manager::{WINDOW_MANAGER, WindowAction};
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use std::sync::mpsc;
@@ -48,12 +48,12 @@ pub fn WindowController() -> Element {
                                 window_clone.set_visible(true);
                                 window_clone.set_focus();
                                 WINDOW_MANAGER.set_visible(true);
-                                println!("🔼 Window shown from internal action");
+                                log::info!("🔼 Window shown from internal action");
                             }
                             WindowAction::Hide => {
                                 window_clone.set_visible(false);
                                 WINDOW_MANAGER.set_visible(false);
-                                println!("🔽 Window hidden from internal action");
+                                log::info!("🔽 Window hidden from internal action");
                             }
                         }
                     }
@@ -63,9 +63,12 @@ pub fn WindowController() -> Element {
                     tray_manager_clone.with_mut(|tray_opt| {
                         if let Some(tray) = tray_opt {
                             if let Err(e) = tray.update_menu() {
-                                eprintln!("❌ Failed to update tray menu from global request: {}", e);
+                                log::error!(
+                                    "❌ Failed to update tray menu from global request: {}",
+                                    e
+                                );
                             } else {
-                                println!("✅ Tray menu updated from global request");
+                                log::info!("✅ Tray menu updated from global request");
                             }
                         }
                     });
@@ -103,7 +106,10 @@ pub fn WindowController() -> Element {
                                     });
                                 }
                                 Err(e) => {
-                                    log::error!("❌ Failed to save config after mute toggle: {}", e);
+                                    log::error!(
+                                        "❌ Failed to save config after mute toggle: {}",
+                                        e
+                                    );
                                 }
                             }
                         }
@@ -118,21 +124,21 @@ pub fn WindowController() -> Element {
                         TrayMessage::OpenDiscord => {
                             let url = "https://discord.com/invite/MMVrhWxa4w";
                             if let Err(e) = open::that(url) {
-                                eprintln!("❌ Failed to open Discord URL: {}", e);
+                                log::error!("❌ Failed to open Discord URL: {}", e);
                             } else {
-                                println!("💬 Opened Discord community in browser");
+                                log::info!("💬 Opened Discord community in browser");
                             }
                         }
                         TrayMessage::OpenWebsite => {
                             let url = "https://mechvibes.com";
                             if let Err(e) = open::that(url) {
-                                eprintln!("❌ Failed to open website URL: {}", e);
+                                log::error!("❌ Failed to open website URL: {}", e);
                             } else {
-                                println!("🌐 Opened official website in browser");
+                                log::info!("🌐 Opened official website in browser");
                             }
                         }
                         TrayMessage::Exit => {
-                            println!("📢 Tray: Exit requested - closing application");
+                            log::info!("📢 Tray: Exit requested - closing application");
                             // Close the window which will trigger app exit
                             window_clone.close();
                         }

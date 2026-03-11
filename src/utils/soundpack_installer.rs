@@ -168,7 +168,7 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
         std::io::copy(&mut file, &mut output_file)
             .map_err(|e| format!("Failed to extract file: {}", e))?;
     } // Now handle V1 to V2 conversion after files are extracted
-    println!(
+    log::info!(
         "🔧 Converting config after file extraction - soundpack_dir: {}",
         install_dir.to_string_lossy()
     );
@@ -341,12 +341,12 @@ fn handle_config_conversion(
 
     let mut final_config_content = config_content.to_string();
 
-    println!("⚒️ Soundpack validation result: {:?}", validation_result);
+    log::info!("⚒️ Soundpack validation result: {:?}", validation_result);
 
     if validation_result.status
         == crate::utils::soundpack_validator::SoundpackValidationStatus::VersionOneNeedsConversion
     {
-        println!(
+        log::info!(
             "🔄 Converting V1 soundpack '{}' to V2 format during import",
             soundpack_id
         );
@@ -354,13 +354,13 @@ fn handle_config_conversion(
         // Create backup of the original V1 config before conversion
         let config_backup_path = std::path::Path::new(soundpack_dir).join("config.json.v1.backup");
         if let Err(e) = std::fs::write(&config_backup_path, config_content) {
-            !error(
+            log::error!(
                 "⚠️Failed to create V1 config backup for {}: {}",
                 soundpack_id,
                 e,
             );
         } else {
-            println!(
+            log::info!(
                 "💾 Created V1 config backup at: {}",
                 config_backup_path.display()
             );
@@ -381,7 +381,7 @@ fn handle_config_conversion(
                 final_config_content = std::fs::read_to_string(&temp_output)
                     .map_err(|e| format!("Failed to read converted config: {}", e))?;
 
-                println!(
+                log::info!(
                     "✅ Successfully converted {} from V1 to V2 during import",
                     soundpack_id
                 );

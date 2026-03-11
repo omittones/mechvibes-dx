@@ -8,8 +8,7 @@ use std::process::Command;
 pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let exe_path = env::current_exe()?;
     let exe_path_str = exe_path.to_string_lossy();
-    println!(
-        "🔗 Registering {}// protocol... {}",
+    log::info!("🔗 Registering {}// protocol... {}",
         APP_PROTOCOL, exe_path_str
     ); // Store formatted strings to avoid temporary value issues
     let icon_path = format!("\"{}\"", exe_path_str);
@@ -63,20 +62,19 @@ pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
-            eprintln!("❌ Registry command failed: {}", error);
+            log::error!("❌ Registry command failed: {}", error);
         }
     }
 
-    println!("✅ Protocol {}// registered successfully", APP_PROTOCOL);
+    log::info!("✅ Protocol {}// registered successfully", APP_PROTOCOL);
     Ok(())
 }
 
 #[cfg(target_os = "macos")]
 pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🍎 Protocol registration on macOS requires app bundle configuration in Info.plist");
-    println!("Add the following to your Info.plist:");
-    println!(
-        r#"
+    log::info!("🍎 Protocol registration on macOS requires app bundle configuration in Info.plist");
+    log::info!("Add the following to your Info.plist:");
+    log::info!(r#"
 <key>CFBundleURLTypes</key>    <array>
         <dict>
             <key>CFBundleURLName</key>
@@ -104,7 +102,7 @@ pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
     );
     let exe_path = env::current_exe()?;
 
-    println!("🐧 Registering {}// protocol on Linux...", APP_PROTOCOL);
+    log::info!("🐧 Registering {}// protocol on Linux...", APP_PROTOCOL);
 
     let desktop_content = format!(
         r#"[Desktop Entry]
@@ -132,7 +130,7 @@ Categories=AudioVideo;Utility;
         .arg(&apps_dir)
         .output();
 
-    println!("✅ Protocol {}// registered successfully", APP_PROTOCOL);
+    log::info!("✅ Protocol {}// registered successfully", APP_PROTOCOL);
     Ok(())
 }
 
@@ -144,26 +142,26 @@ pub fn handle_protocol_url(url: &str) -> Result<(), Box<dyn std::error::Error>> 
 
     let protocol_prefix_len = APP_PROTOCOL_URL.len();
     let path = &url[protocol_prefix_len..]; // Remove protocol prefix
-    println!("🔗 Handling protocol URL: {}{}", APP_PROTOCOL_URL, path);
+    log::info!("🔗 Handling protocol URL: {}{}", APP_PROTOCOL_URL, path);
 
     match path {
         "open" | "" => {
-            println!("📱 Opening {} from protocol", APP_NAME);
+            log::info!("📱 Opening {} from protocol", APP_NAME);
             // The app is already opening, so we just need to ensure it's focused
             focus_window();
         }
         path if path.starts_with("install-soundpack/") => {
             let soundpack_name = &path[18..];
-            println!("🔊 Installing soundpack from protocol: {}", soundpack_name);
+            log::info!("🔊 Installing soundpack from protocol: {}", soundpack_name);
             install_soundpack_from_protocol(soundpack_name)?;
         }
         path if path.starts_with("import-theme/") => {
             let theme_data = &path[13..];
-            println!("📥 Importing theme from protocol");
+            log::info!("📥 Importing theme from protocol");
             import_theme_from_protocol(theme_data)?;
         }
         _ => {
-            println!("❓ Unknown protocol path: {}", path);
+            log::info!("❓ Unknown protocol path: {}", path);
             return Err(format!("Unknown protocol path: {}", path).into());
         }
     }
@@ -175,12 +173,12 @@ pub fn handle_protocol_url(url: &str) -> Result<(), Box<dyn std::error::Error>> 
 #[cfg(target_os = "windows")]
 fn focus_window() {
     // On Windows, the window should automatically focus when the protocol is triggered
-    println!("🪟 Focusing window on Windows");
+    log::info!("Focusing window on Windows");
 }
 
 #[cfg(not(target_os = "windows"))]
 fn focus_window() {
-    println!("🖥️ Window focus handling for this platform not implemented");
+    log::info!("🖥️ Window focus handling for this platform not implemented");
 }
 
 fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -188,7 +186,7 @@ fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn s
     use std::fs;
     use std::path::Path;
 
-    println!("📥 Installing soundpack: {}", soundpack_name);
+    log::info!("📥 Installing soundpack: {}", soundpack_name);
 
     // In a real implementation, this would download the soundpack from a remote source
     // For testing purposes, we'll just check if it exists locally and add it to config
@@ -202,13 +200,13 @@ fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn s
         let mut config = AppConfig::load();
         config.keyboard_soundpack = soundpack_name.to_string();
         if let Err(e) = config.save() {
-            eprintln!("❌ Failed to save config with new soundpack: {}", e);
+            log::error!("❌ Failed to save config with new soundpack: {}", e);
             return Err(e.into());
         }
-        println!("✅ Installed and activated soundpack: {}", soundpack_name);
+        log::info!("✅ Installed and activated soundpack: {}", soundpack_name);
     } else {
         // For real implementation, we would download it here
-        !error(
+        log::warn!(
             "⚠️Soundpack not found locally: {}. Would download in production.",
             soundpack_name,
         );
@@ -244,12 +242,11 @@ fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn s
         let mut config = AppConfig::load();
         config.keyboard_soundpack = soundpack_name.to_string();
         if let Err(e) = config.save() {
-            eprintln!("❌ Failed to save config with new soundpack: {}", e);
+            log::error!("❌ Failed to save config with new soundpack: {}", e);
             return Err(e.into());
         }
 
-        println!(
-            "✅ Created and activated placeholder soundpack: {}",
+        log::info!("✅ Created and activated placeholder soundpack: {}",
             soundpack_name
         );
     }
@@ -266,7 +263,7 @@ fn import_theme_from_protocol(theme_data: &str) -> Result<(), Box<dyn std::error
     use chrono::Utc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    println!("📥 Importing theme from protocol data");
+    log::info!("📥 Importing theme from protocol data");
 
     // In a real implementation, this would decode the base64 data
     // For testing purposes, we'll create a simple theme
@@ -314,6 +311,6 @@ fn import_theme_from_protocol(theme_data: &str) -> Result<(), Box<dyn std::error
         return Err(format!("Failed to apply imported theme: {}", e).into());
     }
 
-    println!("✅ Theme imported and applied: {}", theme_name);
+    log::info!("✅ Theme imported and applied: {}", theme_name);
     Ok(())
 }

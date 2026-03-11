@@ -121,10 +121,10 @@ pub fn SettingsPage() -> Element {
                               match crate::utils::auto_startup::set_auto_startup(new_value) {
                                   Ok(_) => {
                                       let status = if new_value { "enabled" } else { "disabled" };
-                                      println!("✅ Auto startup {}", status);
+                                      log::info!("✅ Auto startup {}", status);
                                   }
                                   Err(e) => {
-                                      eprintln!("❌ Failed to set auto startup: {}", e);
+                                      log::error!("❌ Failed to set auto startup: {}", e);
                                   }
                               }
                           });
@@ -154,10 +154,10 @@ pub fn SettingsPage() -> Element {
                                             } else {
                                                 "without minimized flag"
                                             };
-                                            println!("✅ Auto startup updated {}", status);
+                                            log::info!("✅ Auto startup updated {}", status);
                                         }
                                         Err(e) => {
-                                            eprintln!("❌ Failed to update auto startup: {}", e);
+                                            log::error!("❌ Failed to update auto startup: {}", e);
                                         }
                                     }
                                 }
@@ -200,7 +200,7 @@ pub fn SettingsPage() -> Element {
                     class: "btn btn-soft btn-sm",
                     disabled: is_checking_updates(),
                     onclick: move |_| {
-                        println!("Manual update check requested");
+                        log::info!("Manual update check requested");
                         is_checking_updates.set(true);
                         check_error.set(None);
                         let mut update_info = update_info.clone();

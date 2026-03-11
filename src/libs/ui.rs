@@ -1,16 +1,16 @@
-use crate::components::window_controller::WindowController;
 use crate::components::header::Header;
+use crate::components::window_controller::WindowController;
+use crate::libs::AudioContext;
+use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
 use crate::libs::tray_service::request_tray_update;
-use crate::libs::input_manager::{ get_input_channels, set_window_focus };
-use crate::libs::AudioContext;
 use crate::state::keyboard::KeyboardState;
 use crate::state::paths;
 use crate::utils::delay;
 
+use dioxus::desktop::tao::event::Event as TaoEvent;
+use dioxus::desktop::{use_asset_handler, use_wry_event_handler, wry::http::Response};
 use dioxus::prelude::*;
-use dioxus::desktop::{ use_asset_handler, use_wry_event_handler, wry::http::Response };
-use dioxus::desktop::tao::event::{ Event as TaoEvent };
 use std::sync::Arc;
 
 pub fn app() -> Element {
@@ -56,13 +56,15 @@ pub fn app() -> Element {
     // Check for updates on startup (from completely closed state)
     use_effect(move || {
         spawn(async move {
-            if
-                let Ok(update_info) =
-                    crate::utils::auto_updater::check_for_updates_on_startup().await
+            if let Ok(update_info) =
+                crate::utils::auto_updater::check_for_updates_on_startup().await
             {
                 log::debug!("🔄 Startup update check completed");
                 if update_info.update_available {
-                    log::info!("🆕 Update available on startup: {}", update_info.latest_version);
+                    log::info!(
+                        "🆕 Update available on startup: {}",
+                        update_info.latest_version
+                    );
                 }
             }
         });
@@ -80,7 +82,11 @@ pub fn app() -> Element {
         use dioxus::desktop::tao::event::WindowEvent;
 
         use_wry_event_handler(move |event, _target| {
-            if let TaoEvent::WindowEvent { event: window_event, .. } = event {
+            if let TaoEvent::WindowEvent {
+                event: window_event,
+                ..
+            } = event
+            {
                 // Check for focus events using proper pattern matching
                 if let WindowEvent::Focused(focused) = window_event {
                     // Update global focus state
@@ -172,7 +178,10 @@ pub fn app() -> Element {
                                         log::debug!("🔄 Sound toggled: {}", config.enable_sound);
                                     }
                                     Err(e) => {
-                                        log::error!("❌ Failed to save config after sound toggle: {}", e);
+                                        log::error!(
+                                            "❌ Failed to save config after sound toggle: {}",
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -210,22 +219,22 @@ pub fn app() -> Element {
             // Security: Validate path segments to prevent directory traversal
             // Reject empty segments, path separators, and parent directory references
             if device_type.is_empty() || soundpack_name.is_empty() || filename.is_empty() {
-                let error_response = Response::builder()
-                    .status(400)
-                    .body(Vec::new())
-                    .unwrap();
+                let error_response = Response::builder().status(400).body(Vec::new()).unwrap();
                 response.respond(error_response);
                 return;
             }
 
-            if device_type.contains("..") || device_type.contains('/') || device_type.contains('\\')
-                || soundpack_name.contains("..") || soundpack_name.contains('/') || soundpack_name.contains('\\')
-                || filename.contains("..") || filename.contains('/') || filename.contains('\\')
+            if device_type.contains("..")
+                || device_type.contains('/')
+                || device_type.contains('\\')
+                || soundpack_name.contains("..")
+                || soundpack_name.contains('/')
+                || soundpack_name.contains('\\')
+                || filename.contains("..")
+                || filename.contains('/')
+                || filename.contains('\\')
             {
-                let error_response = Response::builder()
-                    .status(400)
-                    .body(Vec::new())
-                    .unwrap();
+                let error_response = Response::builder().status(400).body(Vec::new()).unwrap();
                 response.respond(error_response);
                 return;
             }
@@ -280,11 +289,10 @@ pub fn app() -> Element {
         }
 
         // Return 404 for invalid paths or missing files
-        if
-            let Ok(not_found_response) = Response::builder()
-                .status(404)
-                .header("Content-Type", "text/plain")
-                .body(b"Not Found".to_vec())
+        if let Ok(not_found_response) = Response::builder()
+            .status(404)
+            .header("Content-Type", "text/plain")
+            .body(b"Not Found".to_vec())
         {
             response.respond(not_found_response);
         }
@@ -302,10 +310,7 @@ pub fn app() -> Element {
 
             // Security: Reject empty filenames (e.g., trailing slash /custom-images/)
             if filename.is_empty() {
-                let error_response = Response::builder()
-                    .status(400)
-                    .body(Vec::new())
-                    .unwrap();
+                let error_response = Response::builder().status(400).body(Vec::new()).unwrap();
                 response.respond(error_response);
                 return;
             }
@@ -313,10 +318,7 @@ pub fn app() -> Element {
             // Security: Validate filename to prevent directory traversal
             // Reject path separators and parent directory references
             if filename.contains("..") || filename.contains('/') || filename.contains('\\') {
-                let error_response = Response::builder()
-                    .status(400)
-                    .body(Vec::new())
-                    .unwrap();
+                let error_response = Response::builder().status(400).body(Vec::new()).unwrap();
                 response.respond(error_response);
                 return;
             }
@@ -329,10 +331,8 @@ pub fn app() -> Element {
             if let Ok(canonical_path) = image_path.canonicalize() {
                 if let Ok(canonical_base) = custom_images_dir.canonicalize() {
                     if !canonical_path.starts_with(&canonical_base) {
-                        let error_response = Response::builder()
-                            .status(403)
-                            .body(Vec::new())
-                            .unwrap();
+                        let error_response =
+                            Response::builder().status(403).body(Vec::new()).unwrap();
                         response.respond(error_response);
                         return;
                     }
@@ -383,11 +383,10 @@ pub fn app() -> Element {
         }
 
         // Return 404 for invalid paths or missing files
-        if
-            let Ok(not_found_response) = Response::builder()
-                .status(404)
-                .header("Content-Type", "text/plain")
-                .body(b"Not Found".to_vec())
+        if let Ok(not_found_response) = Response::builder()
+            .status(404)
+            .header("Content-Type", "text/plain")
+            .body(b"Not Found".to_vec())
         {
             response.respond(not_found_response);
         }

@@ -1,8 +1,8 @@
-use rdev::{ listen, Button, Event, EventType, Key };
+use rdev::{Button, Event, EventType, Key, listen};
 use std::collections::HashSet;
-use std::sync::{ mpsc::Sender, Arc, Mutex };
+use std::sync::{Arc, Mutex, mpsc::Sender};
 use std::thread;
-use std::time::{ Duration, Instant };
+use std::time::{Duration, Instant};
 
 // Maps a keyboard key to its standardized code
 fn map_key_to_code(key: Key) -> &'static str {
@@ -92,17 +92,17 @@ fn map_key_to_code(key: Key) -> &'static str {
         Key::Num9 => "Digit9",
 
         // Punctuation and symbols
-        Key::Minus => "Minus", // -
-        Key::Equal => "Equal", // =
-        Key::Comma => "Comma", // ,
-        Key::Dot => "Period", // .
-        Key::Quote => "Quote", // '
-        Key::BackQuote => "Backquote", // `
-        Key::Slash => "Slash", // /
-        Key::LeftBracket => "BracketLeft", // [
-        Key::RightBracket => "BracketRight", // ]
-        Key::BackSlash => "Backslash", // \
-        Key::SemiColon => "Semicolon", // ;
+        Key::Minus => "Minus",                 // -
+        Key::Equal => "Equal",                 // =
+        Key::Comma => "Comma",                 // ,
+        Key::Dot => "Period",                  // .
+        Key::Quote => "Quote",                 // '
+        Key::BackQuote => "Backquote",         // `
+        Key::Slash => "Slash",                 // /
+        Key::LeftBracket => "BracketLeft",     // [
+        Key::RightBracket => "BracketRight",   // ]
+        Key::BackSlash => "Backslash",         // \
+        Key::SemiColon => "Semicolon",         // ;
         Key::IntlBackslash => "IntlBackslash", // Additional backslash key on some keyboards
 
         // Numpad keys
@@ -166,10 +166,10 @@ pub fn start_unified_input_listener(
     hotkey_tx: Sender<String>,
     is_focused: Option<Arc<Mutex<bool>>>,
 ) {
-    println!("🎮 Starting unified input listener (keyboard + mouse + hotkeys)...");
+    log::info!("🎮 Starting unified input listener (keyboard + mouse + hotkeys)...");
 
     thread::spawn(move || {
-        println!("🎮 Unified input listener thread started");
+        log::info!("🎮 Unified input listener thread started");
 
         // Separate state tracking for keyboard and mouse
         let keyboard_last_press = Arc::new(Mutex::new(Instant::now()));
@@ -181,7 +181,7 @@ pub fn start_unified_input_listener(
         let mut ctrl_pressed = false;
         let mut alt_pressed = false;
 
-        println!("🎮 Starting rdev::listen() - listening to keyboard/mouse events");
+        log::info!("🎮 Starting rdev::listen() - listening to keyboard/mouse events");
         let result = listen(move |event: Event| {
             match event.event_type {
                 // ===== KEYBOARD EVENTS =====
@@ -199,7 +199,7 @@ pub fn start_unified_input_listener(
                             "KeyM" => {
                                 // Check for Ctrl+Alt+M hotkey combination
                                 if ctrl_pressed && alt_pressed {
-                                    println!(
+                                    log::info!(
                                         "🔥 Hotkey detected: Ctrl+Alt+M - Toggling global sound"
                                     );
                                     let _ = hotkey_tx.send("TOGGLE_SOUND".to_string());
@@ -273,8 +273,8 @@ pub fn start_unified_input_listener(
                 EventType::ButtonPress(button) => {
                     let button_code = map_button_to_code(button);
                     if !button_code.is_empty() && button_code != "MouseUnknown" {
-                        // println!("🖱️ Mouse Button Pressed: {}", button_code);
-                        // println!("🔍 DEBUG: Mouse event detected: {}", button_code);
+                        // log::info!("🖱️ Mouse Button Pressed: {}", button_code);
+                        // log::debug!("🔍 DEBUG: Mouse event detected: {}", button_code);
 
                         // Check if button is already pressed
                         let mut pressed = pressed_buttons.lock().unwrap();
@@ -288,11 +288,10 @@ pub fn start_unified_input_listener(
                         let time_since_last = now.duration_since(*last);
 
                         // General rapid event detection (< 60ms) - log but still process
-                        if
-                            time_since_last < Duration::from_millis(60) &&
-                            time_since_last > Duration::from_millis(1)
+                        if time_since_last < Duration::from_millis(60)
+                            && time_since_last > Duration::from_millis(1)
                         {
-                            println!(
+                            log::info!(
                                 "⚡ RAPID MOUSE EVENT detected: '{}' fired {:.1}ms after previous mouse event",
                                 button_code,
                                 time_since_last.as_millis()
@@ -308,7 +307,7 @@ pub fn start_unified_input_listener(
                 EventType::ButtonRelease(button) => {
                     let button_code = map_button_to_code(button);
                     if !button_code.is_empty() && button_code != "MouseUnknown" {
-                        // println!("🖱️ Mouse Button Released: {}", button_code);
+                        // log::info!("🖱️ Mouse Button Released: {}", button_code);
 
                         // Remove button from pressed set
                         let mut pressed = pressed_buttons.lock().unwrap();
@@ -319,7 +318,10 @@ pub fn start_unified_input_listener(
                     }
                 }
                 // Skip mouse wheel events for now
-                EventType::Wheel { delta_x: _, delta_y: _ } => {
+                EventType::Wheel {
+                    delta_x: _,
+                    delta_y: _,
+                } => {
                     // let wheel_event = if delta_y > 0 {
                     //     "MouseWheelUp"
                     // } else if delta_y < 0 {
@@ -328,7 +330,7 @@ pub fn start_unified_input_listener(
                     //     return; // No vertical scroll, ignore
                     // };
 
-                    // println!("🖱️ Mouse Wheel: {}", wheel_event);
+                    // log::info!("🖱️ Mouse Wheel: {}", wheel_event);
 
                     // // Apply longer debounce for wheel events
                     // let now = Instant::now();
@@ -340,13 +342,13 @@ pub fn start_unified_input_listener(
                 }
                 EventType::MouseMove { x: _, y: _ } => {
                     // Mouse move events are too noisy, ignore them
-                    // println!("🖱️ Mouse Move: ({}, {})", x, y);
+                    // log::info!("🖱️ Mouse Move: ({}, {})", x, y);
                 }
             }
         });
 
         if let Err(error) = result {
-            eprintln!("❌ Unified input listener error: {:?}", error);
+            log::error!("❌ Unified input listener error: {:?}", error);
         }
     });
 }

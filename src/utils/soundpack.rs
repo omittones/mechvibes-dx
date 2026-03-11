@@ -47,13 +47,15 @@ pub fn load_soundpack_metadata(
     // Check if this is V2 config with multi method and convert to single method
     if let Some(definition_method) = config.get("definition_method").and_then(|v| v.as_str()) {
         if definition_method == "multi" {
-            println!("🔄 [CACHE DEBUG] Found V2 multi method config, converting to single method");
+            log::debug!(
+                "🔄 [CACHE DEBUG] Found V2 multi method config, converting to single method"
+            );
             let soundpack_dir = paths::soundpacks::soundpack_dir(soundpack_id);
 
             if let Err(e) =
                 config_converter::convert_v2_multi_to_single(&config_path, &soundpack_dir)
             {
-                println!("❌ [CACHE DEBUG] Failed to convert multi to single: {}", e);
+                log::error!("❌ [CACHE DEBUG] Failed to convert multi to single: {}", e);
                 return Err(format!("Failed to convert multi to single method: {}", e));
             }
 
@@ -63,15 +65,15 @@ pub fn load_soundpack_metadata(
             config = serde_json::from_str(&new_content)
                 .map_err(|e| format!("Failed to parse converted config: {}", e))?;
 
-            println!("✅ [CACHE DEBUG] Successfully converted to single method");
+            log::info!("✅ [CACHE DEBUG] Successfully converted to single method");
         }
     }
 
     // Debug: Check if config has audio_file field
     let audio_file = config.get("audio_file").and_then(|v| v.as_str());
-    println!("🔍 [CACHE DEBUG] soundpack_id: {}", soundpack_id);
-    println!("🔍 [CACHE DEBUG] config_path: {}", config_path);
-    println!("🔍 [CACHE DEBUG] audio_file in config: {:?}", audio_file);
+    log::debug!("🔍 [CACHE DEBUG] soundpack_id: {}", soundpack_id);
+    log::debug!("🔍 [CACHE DEBUG] config_path: {}", config_path);
+    log::debug!("🔍 [CACHE DEBUG] audio_file in config: {:?}", audio_file);
 
     // If audio_file exists, check if the actual file exists
     if let Some(audio_filename) = audio_file {
@@ -81,21 +83,20 @@ pub fn load_soundpack_metadata(
             soundpack_dir,
             audio_filename.trim_start_matches("./")
         );
-        println!("🔍 [CACHE DEBUG] soundpack_dir: {}", soundpack_dir);
-        println!("🔍 [CACHE DEBUG] full_audio_path: {}", full_audio_path);
-        println!(
+        log::debug!("🔍 [CACHE DEBUG] soundpack_dir: {}", soundpack_dir);
+        log::debug!("🔍 [CACHE DEBUG] full_audio_path: {}", full_audio_path);
+        log::info!(
             "🔍 [CACHE DEBUG] audio file exists: {}",
             std::path::Path::new(&full_audio_path).exists()
         );
 
         if !std::path::Path::new(&full_audio_path).exists() {
-            println!(
-                "⚠️ [CACHE DEBUG] Audio file not found during cache refresh: {}",
+            log::info!("⚠️ [CACHE DEBUG] Audio file not found during cache refresh: {}",
                 full_audio_path
             );
         }
     } else {
-        error!("⚠️[CACHE DEBUG] No audio_file field found in config");
+        log::error!("⚠️[CACHE DEBUG] No audio_file field found in config");
     }
 
     let name = config
@@ -148,8 +149,7 @@ pub fn load_soundpack_metadata(
                     paths::soundpacks::soundpack_dir(soundpack_id),
                     icon_filename
                 );
-                println!(
-                    "🔍 Checking icon for {}: {} -> exists: {}",
+                log::debug!("🔍 Checking icon for {}: {} -> exists: {}",
                     soundpack_id,
                     icon_path,
                     std::path::Path::new(&icon_path).exists()
@@ -157,17 +157,16 @@ pub fn load_soundpack_metadata(
                 if std::path::Path::new(&icon_path).exists() {
                     // Generate dynamic asset URL instead of base64 data URI
                     let asset_url = format!("/soundpack-images/{}/{}", soundpack_id, icon_filename);
-                    println!("✅ Generated asset URL for {}: {}", soundpack_id, asset_url);
+                    log::info!("✅ Generated asset URL for {}: {}", soundpack_id, asset_url);
                     Some(asset_url)
                 } else {
-                    println!(
-                        "❌ Icon not found for {}, setting empty string",
+                    log::error!("❌ Icon not found for {}, setting empty string",
                         soundpack_id
                     );
                     Some(String::new()) // Empty string if icon file not found
                 }
             } else {
-                println!("ℹ️  No icon specified for {}", soundpack_id);
+                log::info!("ℹ️  No icon specified for {}", soundpack_id);
                 Some(String::new()) // Empty string if no icon specified
             }
         },

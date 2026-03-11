@@ -100,7 +100,7 @@ fn MusicPlayerPanel(
                       tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
                       update_global_music_player_state(|player| {
                           if let Some(track_title) = player.next_track() {
-                              println!("Next track: {}", track_title);
+                              log::info!("Next track: {}", track_title);
                           }
                       });
                       refresh_trigger.set(refresh_trigger() + 1);
@@ -407,7 +407,7 @@ pub fn MoodPage() -> Element {
 
             // Initialize global music player state if not already done
             if let Err(e) = initialize_global_music_player_state().await {
-                eprintln!("Failed to initialize global music player: {}", e);
+                log::error!("Failed to initialize global music player: {}", e);
             }
 
             // Initialize global ambiance player state

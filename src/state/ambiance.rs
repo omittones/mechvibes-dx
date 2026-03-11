@@ -1,44 +1,45 @@
-use serde::{ Deserialize, Serialize };
 use crate::state::config::AppConfig;
+use rodio::{Decoder, Sink, Source};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::{ Arc, Mutex };
-use std::thread;
-use rodio::{ Decoder, Sink, Source };
 use std::fs::File;
 use std::io::BufReader;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 // Simple global state for playing sounds
-static GLOBAL_AMBIANCE_SINKS: std::sync::OnceLock<
-    Arc<Mutex<HashMap<String, Sink>>>
-> = std::sync::OnceLock::new();
+static GLOBAL_AMBIANCE_SINKS: std::sync::OnceLock<Arc<Mutex<HashMap<String, Sink>>>> =
+    std::sync::OnceLock::new();
 
 // Global ambiance player state
-static GLOBAL_AMBIANCE_PLAYER_STATE: std::sync::OnceLock<Arc<Mutex<AmbiancePlayerState>>> = std::sync::OnceLock::new();
+static GLOBAL_AMBIANCE_PLAYER_STATE: std::sync::OnceLock<Arc<Mutex<AmbiancePlayerState>>> =
+    std::sync::OnceLock::new();
 
 // Initialize global ambiance player
 pub fn initialize_global_ambiance_player() {
-    let _sinks_ref = GLOBAL_AMBIANCE_SINKS.get_or_init(|| { Arc::new(Mutex::new(HashMap::new())) });
+    let _sinks_ref = GLOBAL_AMBIANCE_SINKS.get_or_init(|| Arc::new(Mutex::new(HashMap::new())));
 
     // Initialize global state
-    let _state_ref = GLOBAL_AMBIANCE_PLAYER_STATE.get_or_init(|| {
-        Arc::new(Mutex::new(AmbiancePlayerState::initialize()))
-    });
+    let _state_ref = GLOBAL_AMBIANCE_PLAYER_STATE
+        .get_or_init(|| Arc::new(Mutex::new(AmbiancePlayerState::initialize())));
 
-    println!("🎵 Global ambiance player initialized");
+    log::info!("🎵 Global ambiance player initialized");
 }
 
 // Initialize global ambiance player state (call from main component)
 pub fn initialize_global_ambiance_player_state() {
-    let state_ref = GLOBAL_AMBIANCE_PLAYER_STATE.get_or_init(|| {
-        Arc::new(Mutex::new(AmbiancePlayerState::initialize()))
-    });
+    let state_ref = GLOBAL_AMBIANCE_PLAYER_STATE
+        .get_or_init(|| Arc::new(Mutex::new(AmbiancePlayerState::initialize())));
 
     // Force initialization
     let _state_lock = state_ref.lock().unwrap();
 }
 
 // Update global ambiance player state
-pub fn update_global_ambiance_player_state<F>(f: F) where F: FnOnce(&mut AmbiancePlayerState) {
+pub fn update_global_ambiance_player_state<F>(f: F)
+where
+    F: FnOnce(&mut AmbiancePlayerState),
+{
     if let Some(state_ref) = GLOBAL_AMBIANCE_PLAYER_STATE.get() {
         if let Ok(mut state_lock) = state_ref.lock() {
             f(&mut *state_lock);
@@ -48,17 +49,16 @@ pub fn update_global_ambiance_player_state<F>(f: F) where F: FnOnce(&mut Ambianc
 
 // Get a copy of global ambiance player state
 pub fn get_global_ambiance_player_state_copy() -> Option<AmbiancePlayerState> {
-    GLOBAL_AMBIANCE_PLAYER_STATE.get().and_then(|state_ref| {
-        state_ref
-            .lock()
-            .ok()
-            .map(|state| state.clone())
-    })
+    GLOBAL_AMBIANCE_PLAYER_STATE
+        .get()
+        .and_then(|state_ref| state_ref.lock().ok().map(|state| state.clone()))
 }
 
 // Play a sound
 pub fn play_ambiance_sound(sound_id: String, audio_url: String, volume: f32) -> Result<(), String> {
-    let sinks_ref = GLOBAL_AMBIANCE_SINKS.get().ok_or("Ambiance player not initialized")?;
+    let sinks_ref = GLOBAL_AMBIANCE_SINKS
+        .get()
+        .ok_or("Ambiance player not initialized")?;
     let mut sinks_lock = sinks_ref.lock().unwrap();
 
     // Stop existing sound if playing
@@ -69,26 +69,22 @@ pub fn play_ambiance_sound(sound_id: String, audio_url: String, volume: f32) -> 
     // Create new audio stream for this sound
     thread::spawn(move || {
         let result = (|| -> Result<(), String> {
-            let (_stream, stream_handle) = rodio::OutputStream
-                ::try_default()
+            let (_stream, stream_handle) = rodio::OutputStream::try_default()
                 .map_err(|e| format!("Failed to create audio output stream: {}", e))?;
 
-            let sink = Sink::try_new(&stream_handle).map_err(|e|
-                format!("Failed to create audio sink: {}", e)
-            )?;
+            let sink = Sink::try_new(&stream_handle)
+                .map_err(|e| format!("Failed to create audio sink: {}", e))?;
 
             // Load audio file from local path
             let audio_path = audio_url.replace("assets/", "");
             let full_path = format!("assets/{}", audio_path);
 
-            let file = File::open(&full_path).map_err(|e|
-                format!("Failed to open audio file {}: {}", full_path, e)
-            )?;
+            let file = File::open(&full_path)
+                .map_err(|e| format!("Failed to open audio file {}: {}", full_path, e))?;
             let buf_reader = BufReader::new(file);
 
-            let decoder = Decoder::new(buf_reader).map_err(|e|
-                format!("Failed to decode audio: {}", e)
-            )?;
+            let decoder =
+                Decoder::new(buf_reader).map_err(|e| format!("Failed to decode audio: {}", e))?;
 
             sink.set_volume(volume.clamp(0.0, 1.0));
             sink.append(decoder.repeat_infinite());
@@ -99,7 +95,7 @@ pub fn play_ambiance_sound(sound_id: String, audio_url: String, volume: f32) -> 
                 sinks_lock.insert(sound_id.clone(), sink);
             }
 
-            println!("🎵 Started playing ambiance sound: {}", sound_id);
+            log::info!("🎵 Started playing ambiance sound: {}", sound_id);
 
             // Keep the stream alive
             loop {
@@ -119,7 +115,7 @@ pub fn play_ambiance_sound(sound_id: String, audio_url: String, volume: f32) -> 
         })();
 
         if let Err(e) = result {
-            eprintln!("❌ Failed to play ambiance sound {}: {}", sound_id, e);
+            log::error!("❌ Failed to play ambiance sound {}: {}", sound_id, e);
         }
     });
 
@@ -128,12 +124,14 @@ pub fn play_ambiance_sound(sound_id: String, audio_url: String, volume: f32) -> 
 
 // Stop a sound
 pub fn stop_ambiance_sound(sound_id: &str) -> Result<(), String> {
-    let sinks_ref = GLOBAL_AMBIANCE_SINKS.get().ok_or("Ambiance player not initialized")?;
+    let sinks_ref = GLOBAL_AMBIANCE_SINKS
+        .get()
+        .ok_or("Ambiance player not initialized")?;
     let mut sinks_lock = sinks_ref.lock().unwrap();
 
     if let Some(sink) = sinks_lock.remove(sound_id) {
         sink.stop();
-        println!("🔇 Stopped ambiance sound: {}", sound_id);
+        log::info!("🔇 Stopped ambiance sound: {}", sound_id);
     }
 
     Ok(())
@@ -141,33 +139,39 @@ pub fn stop_ambiance_sound(sound_id: &str) -> Result<(), String> {
 
 // Pause all sounds
 pub fn pause_all_ambiance_sounds() -> Result<(), String> {
-    let sinks_ref = GLOBAL_AMBIANCE_SINKS.get().ok_or("Ambiance player not initialized")?;
+    let sinks_ref = GLOBAL_AMBIANCE_SINKS
+        .get()
+        .ok_or("Ambiance player not initialized")?;
     let sinks_lock = sinks_ref.lock().unwrap();
 
     for sink in sinks_lock.values() {
         sink.pause();
     }
-    println!("⏸️ Paused all ambiance sounds");
+    log::info!("⏸️ Paused all ambiance sounds");
 
     Ok(())
 }
 
 // Resume all sounds
 pub fn resume_all_ambiance_sounds() -> Result<(), String> {
-    let sinks_ref = GLOBAL_AMBIANCE_SINKS.get().ok_or("Ambiance player not initialized")?;
+    let sinks_ref = GLOBAL_AMBIANCE_SINKS
+        .get()
+        .ok_or("Ambiance player not initialized")?;
     let sinks_lock = sinks_ref.lock().unwrap();
 
     for sink in sinks_lock.values() {
         sink.play();
     }
-    println!("▶️ Resumed all ambiance sounds");
+    log::info!("▶️ Resumed all ambiance sounds");
 
     Ok(())
 }
 
 // Set sound volume
 pub fn set_ambiance_sound_volume(sound_id: &str, volume: f32) -> Result<(), String> {
-    let sinks_ref = GLOBAL_AMBIANCE_SINKS.get().ok_or("Ambiance player not initialized")?;
+    let sinks_ref = GLOBAL_AMBIANCE_SINKS
+        .get()
+        .ok_or("Ambiance player not initialized")?;
     let sinks_lock = sinks_ref.lock().unwrap();
 
     if let Some(sink) = sinks_lock.get(sound_id) {
@@ -179,7 +183,9 @@ pub fn set_ambiance_sound_volume(sound_id: &str, volume: f32) -> Result<(), Stri
 
 // Set global volume for all sounds
 pub fn set_global_ambiance_volume(volume: f32) -> Result<(), String> {
-    let sinks_ref = GLOBAL_AMBIANCE_SINKS.get().ok_or("Ambiance player not initialized")?;
+    let sinks_ref = GLOBAL_AMBIANCE_SINKS
+        .get()
+        .ok_or("Ambiance player not initialized")?;
     let sinks_lock = sinks_ref.lock().unwrap();
 
     let clamped_volume = volume.clamp(0.0, 1.0);
@@ -192,7 +198,9 @@ pub fn set_global_ambiance_volume(volume: f32) -> Result<(), String> {
 
 // Set global mute for all sounds
 pub fn set_global_ambiance_mute(muted: bool) -> Result<(), String> {
-    let sinks_ref = GLOBAL_AMBIANCE_SINKS.get().ok_or("Ambiance player not initialized")?;
+    let sinks_ref = GLOBAL_AMBIANCE_SINKS
+        .get()
+        .ok_or("Ambiance player not initialized")?;
     let sinks_lock = sinks_ref.lock().unwrap();
 
     for sink in sinks_lock.values() {
@@ -219,7 +227,7 @@ pub struct AmbianceSound {
 pub struct AmbiancePlayerState {
     pub sounds: Vec<AmbianceSound>,
     pub active_sounds: HashMap<String, f32>, // sound_id -> individual volume (0.0 to 1.0)
-    pub global_volume: f32, // 0.0 to 1.0 - global multiplier for all sounds
+    pub global_volume: f32,                  // 0.0 to 1.0 - global multiplier for all sounds
     pub is_muted: bool,
     pub is_playing: bool, // Global play/pause state for all ambiance sounds
 }
@@ -336,7 +344,7 @@ impl AmbiancePlayerState {
                 description: "Ambient coffee shop chatter".to_string(),
                 audio_url: "assets/sounds/chatter.mp3".to_string(),
                 icon: "coffee".to_string(),
-            }
+            },
         ]
     }
 
@@ -370,7 +378,7 @@ impl AmbiancePlayerState {
                     let _ = play_ambiance_sound(
                         sound_id.clone(),
                         sound.audio_url.clone(),
-                        effective_volume
+                        effective_volume,
                     );
                 }
             }
@@ -441,7 +449,7 @@ impl AmbiancePlayerState {
                 let _ = play_ambiance_sound(
                     sound_id.clone(),
                     sound.audio_url.clone(),
-                    effective_volume
+                    effective_volume,
                 );
             }
         }

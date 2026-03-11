@@ -1,17 +1,20 @@
-use serde::{ Deserialize, Serialize };
-use std::time::{ SystemTime, UNIX_EPOCH };
-use rand::seq::SliceRandom;
-use crate::utils::path;
-use crate::state::config::AppConfig;
 use crate::libs::audio::music_player::RodioMusicPlayer;
-use std::sync::{ Arc, Mutex };
+use crate::state::config::AppConfig;
+use crate::utils::path;
+use rand::seq::SliceRandom;
+use serde::{Deserialize, Serialize};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // Music player command channel
-static MUSIC_PLAYER_CHANNEL: std::sync::OnceLock<Arc<Mutex<Option<mpsc::Sender<MusicPlayerCommand>>>>> = std::sync::OnceLock::new();
+static MUSIC_PLAYER_CHANNEL: std::sync::OnceLock<
+    Arc<Mutex<Option<mpsc::Sender<MusicPlayerCommand>>>>,
+> = std::sync::OnceLock::new();
 
 // Global music player state
-static GLOBAL_MUSIC_PLAYER_STATE: std::sync::OnceLock<Arc<Mutex<Option<MusicPlayerState>>>> = std::sync::OnceLock::new();
+static GLOBAL_MUSIC_PLAYER_STATE: std::sync::OnceLock<Arc<Mutex<Option<MusicPlayerState>>>> =
+    std::sync::OnceLock::new();
 
 #[derive(Debug, Clone)]
 pub enum MusicPlayerCommand {
@@ -22,11 +25,15 @@ pub enum MusicPlayerCommand {
 }
 
 pub fn get_music_player_channel() -> Arc<Mutex<Option<mpsc::Sender<MusicPlayerCommand>>>> {
-    MUSIC_PLAYER_CHANNEL.get_or_init(|| Arc::new(Mutex::new(None))).clone()
+    MUSIC_PLAYER_CHANNEL
+        .get_or_init(|| Arc::new(Mutex::new(None)))
+        .clone()
 }
 
 pub fn get_global_music_player_state() -> Arc<Mutex<Option<MusicPlayerState>>> {
-    GLOBAL_MUSIC_PLAYER_STATE.get_or_init(|| Arc::new(Mutex::new(None))).clone()
+    GLOBAL_MUSIC_PLAYER_STATE
+        .get_or_init(|| Arc::new(Mutex::new(None)))
+        .clone()
 }
 
 pub async fn initialize_global_music_player_state() -> Result<(), String> {
@@ -40,9 +47,8 @@ pub async fn initialize_global_music_player_state() -> Result<(), String> {
                 let channel_ref = get_music_player_channel();
                 if let Ok(channel_lock) = channel_ref.try_lock() {
                     if let Some(ref sender) = *channel_lock {
-                        let _ = sender.send(
-                            MusicPlayerCommand::SetVolume(player_state.volume / 100.0)
-                        );
+                        let _ =
+                            sender.send(MusicPlayerCommand::SetVolume(player_state.volume / 100.0));
                         let _ = sender.send(MusicPlayerCommand::SetMuted(player_state.is_muted));
                     }
                 }
@@ -56,7 +62,10 @@ pub async fn initialize_global_music_player_state() -> Result<(), String> {
     Ok(())
 }
 
-pub fn update_global_music_player_state<F>(f: F) where F: FnOnce(&mut MusicPlayerState) {
+pub fn update_global_music_player_state<F>(f: F)
+where
+    F: FnOnce(&mut MusicPlayerState),
+{
     let global_state_ref = get_global_music_player_state();
     if let Ok(mut global_state_lock) = global_state_ref.try_lock() {
         if let Some(ref mut player_state) = *global_state_lock {
@@ -92,7 +101,7 @@ pub fn initialize_music_player() -> Result<(), String> {
                     match command {
                         MusicPlayerCommand::Play(url) => {
                             if let Err(e) = player.play(&url).await {
-                                eprintln!("Failed to play track: {}", e);
+                                log::error!("Failed to play track: {}", e);
                             }
                         }
                         MusicPlayerCommand::Pause => {
@@ -138,9 +147,7 @@ pub struct MusicCache {
 
 impl Default for MusicCache {
     fn default() -> Self {
-        Self {
-            tracks: Vec::new(),
-        }
+        Self { tracks: Vec::new() }
     }
 }
 
@@ -168,17 +175,15 @@ impl MusicCache {
         }
 
         match path::read_file_contents(&cache_path) {
-            Ok(contents) => {
-                match serde_json::from_str::<MusicCache>(&contents) {
-                    Ok(cache) => Ok(cache),
-                    Err(e) => {
-                        eprintln!("Failed to parse music cache: {}", e);
-                        Ok(Self::new())
-                    }
+            Ok(contents) => match serde_json::from_str::<MusicCache>(&contents) {
+                Ok(cache) => Ok(cache),
+                Err(e) => {
+                    log::error!("Failed to parse music cache: {}", e);
+                    Ok(Self::new())
                 }
-            }
+            },
             Err(e) => {
-                eprintln!("Failed to read music cache file: {}", e);
+                log::error!("Failed to read music cache file: {}", e);
                 Ok(Self::new())
             }
         }
@@ -189,13 +194,13 @@ impl MusicCache {
         let cache_path = get_music_cache_path();
 
         match serde_json::to_string_pretty(self) {
-            Ok(json) => { path::write_file_contents(&cache_path, &json) }
+            Ok(json) => path::write_file_contents(&cache_path, &json),
             Err(e) => Err(format!("Failed to serialize music cache: {}", e)),
         }
     }
     /// Fetch fresh music data from API and update timestamp in config
     pub async fn fetch_and_update() -> Result<Self, String> {
-        println!("🎵 Fetching fresh music data from API...");
+        log::info!("🎵 Fetching fresh music data from API...");
         let _music_api_url = "https://mechvibes-music-stream.vercel.app/music";
 
         // For now, we'll use built-in tracks since we can't make HTTP requests in this context
@@ -227,8 +232,8 @@ impl MusicCache {
             .as_secs();
 
         // Fetch if never updated or older than 6 hours (21600 seconds)
-        config.music_player.music_last_updated == 0 ||
-            current_timestamp - config.music_player.music_last_updated > 21600
+        config.music_player.music_last_updated == 0
+            || current_timestamp - config.music_player.music_last_updated > 21600
     }
     /// Load cache with intelligent caching - only fetch if needed
     pub async fn load_or_fetch() -> Result<Self, String> {
@@ -244,11 +249,13 @@ impl MusicCache {
     pub fn get_current_track(
         &self,
         current_index: usize,
-        shuffle_order: &[usize]
+        shuffle_order: &[usize],
     ) -> Option<&MusicTrack> {
         // Always use shuffle order for random playback
         if !shuffle_order.is_empty() {
-            shuffle_order.get(current_index).and_then(|&track_index| self.tracks.get(track_index))
+            shuffle_order
+                .get(current_index)
+                .and_then(|&track_index| self.tracks.get(track_index))
         } else {
             // Fallback to sequential if shuffle order is empty (shouldn't happen)
             self.tracks.get(current_index)
@@ -1074,8 +1081,7 @@ impl MusicCache {
 }
 
 fn get_music_cache_path() -> String {
-    crate::state::paths::data
-        ::soundpack_cache_json()
+    crate::state::paths::data::soundpack_cache_json()
         .parent()
         .unwrap_or_else(|| std::path::Path::new("data"))
         .join("music.json")
@@ -1092,7 +1098,7 @@ pub struct MusicPlayerState {
     pub current_time: u32, // in seconds
     pub volume: f32,
     pub is_muted: bool,
-    pub current_index: usize, // Current position in shuffle order
+    pub current_index: usize,      // Current position in shuffle order
     pub shuffle_order: Vec<usize>, // Shuffle order for random playback
 }
 
@@ -1170,7 +1176,10 @@ impl MusicPlayerState {
     }
 
     pub fn get_current_track_info(&self) -> (String, String, String, String) {
-        if let Some(track) = self.cache.get_current_track(self.current_index, &self.shuffle_order) {
+        if let Some(track) = self
+            .cache
+            .get_current_track(self.current_index, &self.shuffle_order)
+        {
             (
                 track.title.clone(),
                 track.artist.clone(),
@@ -1187,7 +1196,10 @@ impl MusicPlayerState {
         }
     }
     pub fn get_current_track_image(&self) -> String {
-        if let Some(track) = self.cache.get_current_track(self.current_index, &self.shuffle_order) {
+        if let Some(track) = self
+            .cache
+            .get_current_track(self.current_index, &self.shuffle_order)
+        {
             track.image.clone()
         } else {
             String::new()
@@ -1209,11 +1221,9 @@ impl MusicPlayerState {
             if let Some(ref sender) = *channel_lock {
                 if self.is_playing && !was_playing {
                     // Start playing current track
-                    if
-                        let Some(track) = self.cache.get_current_track(
-                            self.current_index,
-                            &self.shuffle_order
-                        )
+                    if let Some(track) = self
+                        .cache
+                        .get_current_track(self.current_index, &self.shuffle_order)
                     {
                         let _ = sender.send(MusicPlayerCommand::Play(track.audio.clone()));
                     }
@@ -1234,7 +1244,8 @@ impl MusicPlayerState {
             self.current_index = (self.current_index + 1) % self.shuffle_order.len();
             self.current_time = 0;
 
-            let track_title = self.cache
+            let track_title = self
+                .cache
                 .get_current_track(self.current_index, &self.shuffle_order)
                 .map(|track| track.title.clone());
 
@@ -1247,11 +1258,9 @@ impl MusicPlayerState {
                     let channel_ref = get_music_player_channel();
                     if let Ok(channel_lock) = channel_ref.try_lock() {
                         if let Some(ref sender) = *channel_lock {
-                            if
-                                let Some(track) = self.cache.get_current_track(
-                                    self.current_index,
-                                    &self.shuffle_order
-                                )
+                            if let Some(track) = self
+                                .cache
+                                .get_current_track(self.current_index, &self.shuffle_order)
                             {
                                 let _ = sender.send(MusicPlayerCommand::Play(track.audio.clone()));
                             }

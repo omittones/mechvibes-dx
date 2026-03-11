@@ -1,14 +1,14 @@
 use crate::state::config::AppConfig;
 use crate::utils::constants::APP_NAME;
-use chrono::{ DateTime, Utc };
+use chrono::{DateTime, Utc};
 use reqwest;
 use semver::Version;
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::{ interval, Duration as TokioDuration };
+use tokio::time::{Duration as TokioDuration, interval};
 
 // Fixed repository information
 const REPO_OWNER: &str = "hainguyents13";
@@ -75,21 +75,32 @@ impl AutoUpdater {
         }
     }
     pub async fn check_for_updates(&self) -> Result<UpdateInfo, UpdateError> {
-        let url = format!("https://api.github.com/repos/{}/{}/releases", REPO_OWNER, REPO_NAME);
+        let url = format!(
+            "https://api.github.com/repos/{}/{}/releases",
+            REPO_OWNER, REPO_NAME
+        );
 
         let client = reqwest::Client::new();
         let response = client
             .get(&url)
-            .header("User-Agent", format!("{}/{}", APP_NAME, self.current_version))
-            .send().await
+            .header(
+                "User-Agent",
+                format!("{}/{}", APP_NAME, self.current_version),
+            )
+            .send()
+            .await
             .map_err(|e| UpdateError::NetworkError(e.to_string()))?;
 
         if !response.status().is_success() {
-            return Err(UpdateError::NetworkError(format!("HTTP {}", response.status())));
+            return Err(UpdateError::NetworkError(format!(
+                "HTTP {}",
+                response.status()
+            )));
         }
 
         let releases: Vec<GitHubRelease> = response
-            .json().await
+            .json()
+            .await
             .map_err(|e| UpdateError::ParseError(e.to_string()))?;
 
         if releases.is_empty() {
@@ -102,21 +113,19 @@ impl AutoUpdater {
             .find(|release| !release.prerelease)
             .ok_or(UpdateError::NotFound)?;
 
-        println!(
+        log::info!(
             "Latest release: {} ({}), published at {}",
             latest_release.tag_name,
             latest_release.name,
             latest_release.published_at
         );
 
-        let current_version = Version::parse(&self.current_version).map_err(|e|
-            UpdateError::InvalidVersion(e.to_string())
-        )?;
+        let current_version = Version::parse(&self.current_version)
+            .map_err(|e| UpdateError::InvalidVersion(e.to_string()))?;
 
         let latest_version_str = latest_release.tag_name.trim_start_matches('v');
-        let latest_version = Version::parse(latest_version_str).map_err(|e|
-            UpdateError::InvalidVersion(e.to_string())
-        )?;
+        let latest_version = Version::parse(latest_version_str)
+            .map_err(|e| UpdateError::InvalidVersion(e.to_string()))?;
 
         let update_available = latest_version > current_version;
 
@@ -149,20 +158,18 @@ impl AutoUpdater {
         };
 
         for ext in preferred_extensions {
-            if
-                let Some(asset) = assets
-                    .iter()
-                    .find(|asset| {
-                        asset.name.to_lowercase().ends_with(ext) &&
-                            asset.name.to_lowercase().contains("x64")
-                    })
-            {
+            if let Some(asset) = assets.iter().find(|asset| {
+                asset.name.to_lowercase().ends_with(ext)
+                    && asset.name.to_lowercase().contains("x64")
+            }) {
                 return Some(asset.browser_download_url.clone());
             }
         }
 
         // Fallback to first asset if no platform-specific found
-        assets.first().map(|asset| asset.browser_download_url.clone())
+        assets
+            .first()
+            .map(|asset| asset.browser_download_url.clone())
     }
 
     // pub async fn download_update(
@@ -285,9 +292,7 @@ pub struct UpdateService {
 
 impl UpdateService {
     pub fn new(config: Arc<Mutex<AppConfig>>) -> Self {
-        Self {
-            config,
-        }
+        Self { config }
     }
 
     pub async fn start(&self) {
@@ -303,8 +308,7 @@ impl UpdateService {
                     config_guard.auto_update.clone()
                 }; // Check if it's time to check for updates (every 24 hours)
                 if let Some(last_check) = update_config.last_check {
-                    let now = std::time::SystemTime
-                        ::now()
+                    let now = std::time::SystemTime::now()
                         .duration_since(std::time::SystemTime::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs();
@@ -314,7 +318,7 @@ impl UpdateService {
                     }
                 }
 
-                println!("🔄 Checking for updates...");
+                log::debug!("🔄 Checking for updates...");
 
                 match check_for_updates_simple().await {
                     Ok(update_info) => {
@@ -322,17 +326,15 @@ impl UpdateService {
                         {
                             let mut config_guard = config.lock().await;
                             config_guard.auto_update.last_check = Some(
-                                std::time::SystemTime
-                                    ::now()
+                                std::time::SystemTime::now()
                                     .duration_since(std::time::SystemTime::UNIX_EPOCH)
                                     .unwrap_or_default()
-                                    .as_secs()
+                                    .as_secs(),
                             );
                             if update_info.update_available {
                                 // Save update info to config
-                                config_guard.auto_update.available_version = Some(
-                                    update_info.latest_version.clone()
-                                );
+                                config_guard.auto_update.available_version =
+                                    Some(update_info.latest_version.clone());
                                 config_guard.auto_update.available_download_url =
                                     update_info.download_url.clone();
                             } else {
@@ -344,7 +346,7 @@ impl UpdateService {
                             let _ = config_guard.save();
                         }
                         if update_info.update_available {
-                            println!(
+                            log::info!(
                                 "🆕 Update available: {} -> {}",
                                 update_info.current_version,
                                 update_info.latest_version
@@ -352,13 +354,13 @@ impl UpdateService {
                             // Set global update state for UI notification (no UI trigger here)
                             crate::state::app::set_update_info(Some(update_info));
                         } else {
-                            println!("✅ No updates available");
+                            log::info!("✅ No updates available");
                             // Clear update info if no updates
                             crate::state::app::set_update_info(None);
                         }
                     }
                     Err(e) => {
-                        eprintln!("❌ Failed to check for updates: {}", e);
+                        log::error!("❌ Failed to check for updates: {}", e);
                     }
                 }
             }
@@ -387,7 +389,7 @@ impl UpdateService {
     //     update_info: &UpdateInfo
     // ) -> Result<(), Box<dyn std::error::Error>> {
     //     if let Some(download_url) = &update_info.download_url {
-    //         println!("📥 Downloading update...");
+    //         log::info!("📥 Downloading update...");
 
     //         let temp_dir = std::env::temp_dir();
     //         let default_filename = format!("mechvibes_dx_v{}.exe", update_info.latest_version);
@@ -397,10 +399,10 @@ impl UpdateService {
     //         let updater = AutoUpdater::new();
     //         updater.download_update(download_url, &installer_path).await?;
 
-    //         println!("🔧 Installing update...");
+    //         log::info!("🔧 Installing update...");
     //         updater.install_update(&installer_path)?;
 
-    //         println!("✅ Update installed successfully. Please restart the application.");
+    //         log::info!("✅ Update installed successfully. Please restart the application.");
     //         Ok(())
     //     } else {    //         Err("No download URL available".into())
     //     }
@@ -414,27 +416,21 @@ pub fn get_saved_update_info() -> Option<UpdateInfo> {
         let current_version = crate::utils::constants::APP_VERSION;
 
         // Check if saved version is newer than current version
-        if
-            let (Ok(current), Ok(available)) = (
-                Version::parse(current_version),
-                Version::parse(available_version),
-            )
-        {
+        if let (Ok(current), Ok(available)) = (
+            Version::parse(current_version),
+            Version::parse(available_version),
+        ) {
             if available > current {
                 return Some(UpdateInfo {
                     current_version: current_version.to_string(),
                     latest_version: available_version.clone(),
                     update_available: true,
                     download_url: config.auto_update.available_download_url.clone(),
-                    release_notes: Some(
-                        format!(
-                            "https://github.com/{}/{}/releases/tag/v{}",
-                            REPO_OWNER,
-                            REPO_NAME,
-                            available_version
-                        )
-                    ),
-                    published_at: None, // Not saved in config
+                    release_notes: Some(format!(
+                        "https://github.com/{}/{}/releases/tag/v{}",
+                        REPO_OWNER, REPO_NAME, available_version
+                    )),
+                    published_at: None,   // Not saved in config
                     is_prerelease: false, // Not saved in config
                 });
             }
@@ -446,11 +442,10 @@ pub fn get_saved_update_info() -> Option<UpdateInfo> {
 
 // Check for updates on app startup (when app was completely closed)
 pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
-    println!("🔄 Checking for updates on startup...");
+    log::debug!("🔄 Checking for updates on startup...");
 
     let mut config = crate::state::config::AppConfig::load();
-    let now = std::time::SystemTime
-        ::now()
+    let now = std::time::SystemTime::now()
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
@@ -461,20 +456,20 @@ pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
     // 2. Last check was more than 1 hour ago (to avoid spam on frequent restarts)
     let should_check = match config.auto_update.last_check {
         None => {
-            println!("📅 First time checking for updates");
+            log::info!("📅 First time checking for updates");
             true
         }
         Some(last_check) => {
             let time_since_last_check = now.saturating_sub(last_check);
             let one_hour = 3600; // 1 hour in seconds
             if time_since_last_check >= one_hour {
-                println!(
+                log::info!(
                     "📅 Last check was {} hours ago, checking again",
                     time_since_last_check / 3600
                 );
                 true
             } else {
-                println!(
+                log::info!(
                     "📅 Recently checked ({} minutes ago), skipping startup check",
                     time_since_last_check / 60
                 );
@@ -510,7 +505,7 @@ pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
             if update_info.update_available {
                 config.auto_update.available_version = Some(update_info.latest_version.clone());
                 config.auto_update.available_download_url = update_info.download_url.clone();
-                println!(
+                log::info!(
                     "🆕 Startup check: Update available {} -> {}",
                     update_info.current_version,
                     update_info.latest_version
@@ -518,7 +513,7 @@ pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
             } else {
                 config.auto_update.available_version = None;
                 config.auto_update.available_download_url = None;
-                println!("✅ Startup check: No updates available");
+                log::info!("✅ Startup check: No updates available");
             }
 
             let _ = config.save();
@@ -533,7 +528,7 @@ pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
             Ok(update_info)
         }
         Err(e) => {
-            eprintln!("❌ Startup update check failed: {}", e);
+            log::error!("❌ Startup update check failed: {}", e);
             // Return cached info if check failed
             if let Some(saved_update) = get_saved_update_info() {
                 Ok(saved_update)

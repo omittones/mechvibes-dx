@@ -52,7 +52,7 @@ fn ImagePicker(
                                         on_change.call(Some(asset_url));
                                     }
                                     Err(e) => {
-                                        eprintln!("Failed to copy image: {}", e);
+                                        log::error!("Failed to copy image: {}", e);
                                     }
                                 }
                             }

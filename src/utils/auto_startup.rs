@@ -1,10 +1,10 @@
-use std::path::PathBuf;
 use crate::utils::constants::APP_NAME;
+use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
-use winreg::enums::*;
-#[cfg(target_os = "windows")]
 use winreg::RegKey;
+#[cfg(target_os = "windows")]
+use winreg::enums::*;
 
 /// Get the current executable path
 fn get_exe_path() -> Result<PathBuf, String> {
@@ -15,7 +15,9 @@ fn get_exe_path() -> Result<PathBuf, String> {
 #[cfg(target_os = "windows")]
 pub fn enable_auto_startup() -> Result<(), String> {
     let exe_path = get_exe_path()?;
-    let exe_path_str = exe_path.to_str().ok_or("Failed to convert executable path to string")?;
+    let exe_path_str = exe_path
+        .to_str()
+        .ok_or("Failed to convert executable path to string")?;
 
     // Check if we should start minimized
     let config = crate::state::config::AppConfig::load();
@@ -27,14 +29,17 @@ pub fn enable_auto_startup() -> Result<(), String> {
 
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let run_key = hkcu
-        .open_subkey_with_flags("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_WRITE)
+        .open_subkey_with_flags(
+            "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            KEY_WRITE,
+        )
         .map_err(|e| format!("Failed to open registry key: {}", e))?;
 
     run_key
         .set_value(APP_NAME, &command)
         .map_err(|e| format!("Failed to set registry value: {}", e))?;
 
-    println!("✅ Auto startup enabled: {}", command);
+    log::info!("✅ Auto startup enabled: {}", command);
     Ok(())
 }
 
@@ -43,17 +48,20 @@ pub fn enable_auto_startup() -> Result<(), String> {
 pub fn disable_auto_startup() -> Result<(), String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let run_key = hkcu
-        .open_subkey_with_flags("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", KEY_WRITE)
+        .open_subkey_with_flags(
+            "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
+            KEY_WRITE,
+        )
         .map_err(|e| format!("Failed to open registry key: {}", e))?;
 
     match run_key.delete_value(APP_NAME) {
         Ok(_) => {
-            println!("✅ Auto startup disabled");
+            log::info!("✅ Auto startup disabled");
             Ok(())
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             // Entry doesn't exist, which is fine
-            println!("ℹ️ Auto startup was not enabled");
+            log::info!("ℹ️ Auto startup was not enabled");
             Ok(())
         }
         Err(e) => Err(format!("Failed to delete registry value: {}", e)),
@@ -85,7 +93,11 @@ pub fn is_auto_startup_enabled() -> bool {
 pub fn set_auto_startup(enable: bool) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
-        if enable { enable_auto_startup() } else { disable_auto_startup() }
+        if enable {
+            enable_auto_startup()
+        } else {
+            disable_auto_startup()
+        }
     }
 
     #[cfg(not(target_os = "windows"))]

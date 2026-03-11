@@ -1,9 +1,9 @@
-use crate::libs::theme::{ BuiltInTheme, Theme };
+use crate::libs::theme::{BuiltInTheme, Theme};
 use crate::state::paths;
-use crate::utils::{ data, path };
 use crate::utils::auto_updater::AutoUpdateConfig;
-use chrono::{ DateTime, Utc };
-use serde::{ Deserialize, Serialize };
+use crate::utils::{data, path};
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -11,7 +11,7 @@ pub struct MusicPlayerConfig {
     pub current_track_id: Option<String>,
     pub volume: f32, // 0.0 to 100.0
     pub is_muted: bool,
-    pub auto_play: bool, // Auto-play music when app starts
+    pub auto_play: bool,         // Auto-play music when app starts
     pub music_last_updated: u64, // timestamp for music cache
 }
 
@@ -34,7 +34,7 @@ pub struct LogoCustomization {
     pub shadow_color: String,
     pub background_color: String,
     pub background_image: Option<String>, // Path to background image
-    pub use_background_image: bool, // Whether to use image instead of color for background
+    pub use_background_image: bool,       // Whether to use image instead of color for background
     pub muted_background: String,
     pub muted_background_image: Option<String>, // Path to muted background image
     pub use_muted_background_image: bool, // Whether to use image instead of color for muted background
@@ -62,7 +62,7 @@ impl Default for LogoCustomization {
 pub struct BackgroundCustomization {
     pub background_color: String,
     pub background_image: Option<String>, // Path to background image
-    pub use_image: bool, // Whether to use image instead of color
+    pub use_image: bool,                  // Whether to use image instead of color
 }
 
 impl Default for BackgroundCustomization {
@@ -85,15 +85,15 @@ pub struct AppConfig {
     pub keyboard_soundpack: String,
     pub mouse_soundpack: String,
     pub volume: f32,
-    pub mouse_volume: f32, // Separate volume for mouse sounds
+    pub mouse_volume: f32,         // Separate volume for mouse sounds
     pub enable_volume_boost: bool, // Enable/disable volume boost to 200%
     pub enable_sound: bool,
     pub enable_keyboard_sound: bool, // Enable/disable keyboard sounds specifically
-    pub enable_mouse_sound: bool, // Enable/disable mouse sounds specifically
+    pub enable_mouse_sound: bool,    // Enable/disable mouse sounds specifically
     // Device settings
     pub selected_audio_device: Option<String>, // Selected audio output device
-    pub enabled_keyboards: Vec<String>, // Enabled physical keyboards (by device instance ID)
-    pub enabled_mice: Vec<String>, // Enabled physical mice (by device instance ID)
+    pub enabled_keyboards: Vec<String>,        // Enabled physical keyboards (by device instance ID)
+    pub enabled_mice: Vec<String>,             // Enabled physical mice (by device instance ID)
     // UI settings
     pub theme: Theme,
     pub custom_css: String, // Legacy field for existing custom CSS
@@ -104,13 +104,13 @@ pub struct AppConfig {
     // Music player settings
     pub music_player: MusicPlayerConfig, // Ambiance settings
     pub ambiance_active_sounds: HashMap<String, f32>, // sound_id -> volume (0.0 to 1.0)
-    pub ambiance_global_volume: f32, // 0.0 to 1.0 - global multiplier
+    pub ambiance_global_volume: f32,     // 0.0 to 1.0 - global multiplier
     pub ambiance_is_muted: bool,
     // Note: ambiance play state is not persistent - always starts paused
     // System settings
     pub auto_start: bool,
     pub start_minimized: bool, // Start minimized to tray when auto-starting with Windows
-    pub landscape_mode: bool, // Enable/disable landscape mode layout
+    pub landscape_mode: bool,  // Enable/disable landscape mode layout
     pub auto_update: AutoUpdateConfig, // Auto-update settings
 }
 
@@ -121,7 +121,7 @@ impl AppConfig {
         // Ensure data directory exists
         if let Some(parent) = config_path.parent() {
             if let Err(_) = path::ensure_directory_exists(parent) {
-                eprintln!("Warning: Could not create data directory");
+                log::error!("Warning: Could not create data directory");
             }
         }
 
@@ -131,7 +131,7 @@ impl AppConfig {
                 // Sync auto_start with actual registry state
                 let actual_auto_start = crate::utils::auto_startup::get_auto_startup_state();
                 if config.auto_start != actual_auto_start {
-                    println!(
+                    log::info!(
                         "🔄 Syncing auto_start config with registry: {} -> {}",
                         config.auto_start,
                         actual_auto_start
@@ -142,7 +142,10 @@ impl AppConfig {
                 config
             }
             Err(e) => {
-                eprintln!("Warning: Failed to load config file: {}. Using defaults.", e);
+                log::error!(
+                    "Warning: Failed to load config file: {}. Using defaults.",
+                    e
+                );
                 let default_config = Self::default();
                 let _ = default_config.save();
                 default_config
@@ -165,14 +168,14 @@ impl Default for AppConfig {
             keyboard_soundpack: "oreo".to_string(),
             mouse_soundpack: "test-mouse".to_string(),
             volume: 1.0,
-            mouse_volume: 1.0, // Default mouse volume to 100%
+            mouse_volume: 1.0,          // Default mouse volume to 100%
             enable_volume_boost: false, // Default volume boost disabled
             enable_sound: true,
             enable_keyboard_sound: true, // Default keyboard sounds enabled
-            enable_mouse_sound: true, // Default mouse sounds enabled
+            enable_mouse_sound: true,    // Default mouse sounds enabled
             selected_audio_device: None, // Default to system default audio device
             enabled_keyboards: Vec::new(), // Default to no keyboards enabled (all keyboards will work)
-            enabled_mice: Vec::new(), // Default to no mice enabled (all mice will work)
+            enabled_mice: Vec::new(),      // Default to no mice enabled (all mice will work)
             theme: Theme::BuiltIn(BuiltInTheme::System), // Default to System theme
             custom_css: String::new(),
             logo_customization: LogoCustomization::default(),
@@ -186,7 +189,7 @@ impl Default for AppConfig {
             // Note: ambiance play state is not persistent - always starts paused
             auto_start: false,
             start_minimized: false, // Default to not starting minimized
-            landscape_mode: false, // Default landscape mode disabled
+            landscape_mode: false,  // Default landscape mode disabled
             auto_update: AutoUpdateConfig::default(), // Default auto-update settings
         }
     }

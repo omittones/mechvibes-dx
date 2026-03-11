@@ -109,7 +109,7 @@ fn main() {
 
     // Register protocol on first run
     // if let Err(e) = protocol::register_protocol() {
-    //     eprintln!("Warning: Failed to register mechvibes:// protocol: {}", e);
+    //     log::error!("Warning: Failed to register mechvibes:// protocol: {}", e);
     // }    // Initialize global app state before rendering
     state::app::init_app_state();
     state::app::init_update_state();
