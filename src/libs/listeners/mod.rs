@@ -1,4 +1,4 @@
-use std::sync::mpsc;
+use crossbeam_channel as channel;
 
 mod focused_input_listener;
 mod input_listener;
@@ -13,23 +13,20 @@ mod evdev_input_listener;
 // Start input listeners based on platform and display server
 #[cfg(target_os = "linux")]
 pub fn start_listeners(
-    keyboard_tx: mpsc::Sender<String>,
-    mouse_tx: mpsc::Sender<String>,
-    hotkey_tx: mpsc::Sender<String>,
+    keyboard_tx: channel::Sender<String>,
+    mouse_tx: channel::Sender<String>,
+    hotkey_tx: channel::Sender<String>,
 ) {
     use evdev_input_listener::start_evdev_keyboard_listener;
     use std::sync::{Arc, Mutex};
 
     log::debug!("🎮 Starting listeners (Linux mode)...");
 
-    // Detect display server on Linux
     let display_server = std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "x11".to_string());
 
     log::debug!("🔍 Detected display server: {}", display_server);
 
     if display_server == "wayland" {
-        // On Wayland, use evdev for keyboard input (works both focused and unfocused)
-        // evdev also handles hotkey detection (Ctrl+Alt+M)
         log::debug!("🎮 Starting evdev keyboard listener (Wayland mode)...");
         let focus_state = get_window_focus_state();
         start_evdev_keyboard_listener(keyboard_tx.clone(), hotkey_tx.clone(), focus_state);
@@ -40,8 +37,6 @@ pub fn start_listeners(
         let always_focused = Arc::new(Mutex::new(true));
         start_unified_input_listener(keyboard_tx, mouse_tx, hotkey_tx, Some(always_focused));
     } else {
-        // On X11, use the hybrid approach (rdev + device_query)
-        // rdev handles keyboard when unfocused, device_query when focused
         let focus_state = get_window_focus_state();
 
         log::debug!("🎮 Starting unified input listener (X11 mode - unfocused)...");
@@ -57,13 +52,11 @@ pub fn start_listeners(
     }
 }
 
-// On Windows and macOS, use the hybrid approach (rdev + device_query)
-// rdev handles keyboard when unfocused, device_query when focused
 #[cfg(not(target_os = "linux"))]
 pub fn start_listeners(
-    keyboard_tx: mpsc::Sender<String>,
-    mouse_tx: mpsc::Sender<String>,
-    hotkey_tx: mpsc::Sender<String>,
+    keyboard_tx: channel::Sender<String>,
+    mouse_tx: channel::Sender<String>,
+    hotkey_tx: channel::Sender<String>,
 ) {
     log::debug!("🎮 Starting listeners (Windows/macOS mode)...");
 

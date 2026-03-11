@@ -6,6 +6,7 @@ mod libs;
 mod state;
 mod utils;
 
+use crossbeam_channel as channel;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
 use libs::input_manager::{init_input_channels, init_window_focus_state_with_value};
@@ -120,24 +121,12 @@ fn main() {
     // to ensure proper Dioxus runtime context
 
     // Create input event channels for communication between input listener and UI
-    let (keyboard_tx, keyboard_rx) = mpsc::channel::<String>();
-    let (mouse_tx, mouse_rx) = mpsc::channel::<String>();
-    let (hotkey_tx, hotkey_rx) = mpsc::channel::<String>();
-
-    // Clone senders for global access (for window-level keyboard events)
-    let keyboard_tx_clone = keyboard_tx.clone();
-    let mouse_tx_clone = mouse_tx.clone();
-    let hotkey_tx_clone = hotkey_tx.clone();
+    let (keyboard_tx, keyboard_rx) = channel::unbounded::<String>();
+    let (mouse_tx, mouse_rx) = channel::unbounded::<String>();
+    let (hotkey_tx, hotkey_rx) = channel::unbounded::<String>();
 
     // Initialize global input channels for UI to access (including senders for window events)
-    init_input_channels(
-        keyboard_rx,
-        mouse_rx,
-        hotkey_rx,
-        keyboard_tx_clone,
-        mouse_tx_clone,
-        hotkey_tx_clone,
-    );
+    init_input_channels(keyboard_rx, mouse_rx, hotkey_rx);
 
     // Initialize window focus state
     // If window starts visible (not minimized), it will be focused

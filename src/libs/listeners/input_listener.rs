@@ -1,6 +1,7 @@
+use crossbeam_channel as channel;
 use rdev::{Button, Event, EventType, Key, listen};
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, mpsc::Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -161,9 +162,9 @@ fn map_button_to_code(button: Button) -> &'static str {
 /// When is_focused is provided, keyboard events are only sent when the window is UNFOCUSED
 /// to avoid duplicate events with the focused_input_listener
 pub fn start_unified_input_listener(
-    keyboard_tx: Sender<String>,
-    mouse_tx: Sender<String>,
-    hotkey_tx: Sender<String>,
+    keyboard_tx: channel::Sender<String>,
+    mouse_tx: channel::Sender<String>,
+    hotkey_tx: channel::Sender<String>,
     is_focused: Option<Arc<Mutex<bool>>>,
 ) {
     log::info!("🎮 Starting unified input listener (keyboard + mouse + hotkeys)...");

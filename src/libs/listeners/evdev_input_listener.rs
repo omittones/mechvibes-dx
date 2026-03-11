@@ -1,12 +1,12 @@
-use std::sync::mpsc::Sender;
+use crossbeam_channel as channel;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
 #[cfg(target_os = "linux")]
 pub fn start_evdev_keyboard_listener(
-    keyboard_tx: Sender<String>,
-    hotkey_tx: Sender<String>,
+    keyboard_tx: channel::Sender<String>,
+    hotkey_tx: channel::Sender<String>,
     _is_focused: Arc<Mutex<bool>>,
 ) {
     thread::spawn(move || {

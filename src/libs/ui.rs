@@ -26,9 +26,6 @@ pub fn app() -> Element {
         });
     });
 
-    // Get input channels from global state (initialized in main)
-    let input_channels = get_input_channels();
-
     // Create update signal for event-driven state management
     let update_signal = use_signal(|| 0u32);
     use_context_provider(|| update_signal);
@@ -70,10 +67,11 @@ pub fn app() -> Element {
         });
     });
 
-    // Extract receivers from input channels
-    let keyboard_rx = input_channels.keyboard_rx.clone();
-    let mouse_rx = input_channels.mouse_rx.clone();
-    let hotkey_rx = input_channels.hotkey_rx.clone();
+    let input_channels = get_input_channels();
+
+    let keyboard_rx = &input_channels.keyboard_rx;
+    let mouse_rx = &input_channels.mouse_rx;
+    let hotkey_rx = &input_channels.hotkey_rx;
 
     // ===== WINDOW FOCUS TRACKING =====
     // Track window focus state to switch between rdev (unfocused) and device_query (focused)
@@ -108,21 +106,17 @@ pub fn app() -> Element {
 
             async move {
                 loop {
-                    if let Ok(receiver) = keyboard_rx.try_lock() {
-                        if let Ok(keycode) = receiver.try_recv() {
-                            if keycode.starts_with("UP:") {
-                                let key = &keycode[3..];
-                                ctx.play_key_event_sound(key, false);
+                    if let Ok(keycode) = keyboard_rx.try_recv() {
+                        if keycode.starts_with("UP:") {
+                            let key = &keycode[3..];
+                            ctx.play_key_event_sound(key, false);
 
-                                // Update keyboard state - key released
-                                keyboard_state.write().key_pressed = false;
-                            } else if !keycode.is_empty() {
-                                ctx.play_key_event_sound(&keycode, true);
-                                // Update keyboard state - key pressed
-                                let mut state = keyboard_state.write();
-                                state.key_pressed = true;
-                                state.last_key = keycode.clone();
-                            }
+                            keyboard_state.write().key_pressed = false;
+                        } else if !keycode.is_empty() {
+                            ctx.play_key_event_sound(&keycode, true);
+                            let mut state = keyboard_state.write();
+                            state.key_pressed = true;
+                            state.last_key = keycode.clone();
                         }
                     }
                     delay::Delay::key_event().await;
@@ -142,14 +136,12 @@ pub fn app() -> Element {
 
             async move {
                 loop {
-                    if let Ok(receiver) = mouse_rx.try_lock() {
-                        if let Ok(button_code) = receiver.try_recv() {
-                            if button_code.starts_with("UP:") {
-                                let button = &button_code[3..];
-                                ctx.play_mouse_event_sound(button, false);
-                            } else if !button_code.is_empty() {
-                                ctx.play_mouse_event_sound(&button_code, true);
-                            }
+                    if let Ok(button_code) = mouse_rx.try_recv() {
+                        if button_code.starts_with("UP:") {
+                            let button = &button_code[3..];
+                            ctx.play_mouse_event_sound(button, false);
+                        } else if !button_code.is_empty() {
+                            ctx.play_mouse_event_sound(&button_code, true);
                         }
                     }
                     delay::Delay::key_event().await;
@@ -166,25 +158,21 @@ pub fn app() -> Element {
             let hotkey_rx = hotkey_rx.clone();
             async move {
                 loop {
-                    if let Ok(receiver) = hotkey_rx.try_lock() {
-                        if let Ok(hotkey_command) = receiver.try_recv() {
-                            if hotkey_command == "TOGGLE_SOUND" {
-                                // Load current config, toggle enable_sound, and save
-                                let mut config = crate::state::config::AppConfig::load();
-                                config.enable_sound = !config.enable_sound;
-                                config.last_updated = chrono::Utc::now();
-                                match config.save() {
-                                    Ok(_) => {
-                                        // Request tray menu update to reflect the new sound state
-                                        request_tray_update();
-                                        log::debug!("🔄 Sound toggled: {}", config.enable_sound);
-                                    }
-                                    Err(e) => {
-                                        log::error!(
-                                            "❌ Failed to save config after sound toggle: {}",
-                                            e
-                                        );
-                                    }
+                    if let Ok(hotkey_command) = hotkey_rx.try_recv() {
+                        if hotkey_command == "TOGGLE_SOUND" {
+                            let mut config = crate::state::config::AppConfig::load();
+                            config.enable_sound = !config.enable_sound;
+                            config.last_updated = chrono::Utc::now();
+                            match config.save() {
+                                Ok(_) => {
+                                    request_tray_update();
+                                    log::debug!("🔄 Sound toggled: {}", config.enable_sound);
+                                }
+                                Err(e) => {
+                                    log::error!(
+                                        "❌ Failed to save config after sound toggle: {}",
+                                        e
+                                    );
                                 }
                             }
                         }

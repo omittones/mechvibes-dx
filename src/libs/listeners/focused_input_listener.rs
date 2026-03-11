@@ -1,6 +1,7 @@
+use crossbeam_channel as channel;
 use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex, mpsc::Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -123,7 +124,7 @@ fn map_device_query_keycode(key: Keycode) -> &'static str {
 
 /// Start the focused keyboard listener (uses device_query polling)
 /// This listener is ONLY active when the window is focused
-pub fn start_focused_keyboard_listener(keyboard_tx: Sender<String>, is_focused: Arc<Mutex<bool>>) {
+pub fn start_focused_keyboard_listener(keyboard_tx: channel::Sender<String>, is_focused: Arc<Mutex<bool>>) {
     thread::spawn(move || {
         log::info!("🎮 Starting focused keyboard listener (device_query polling)...");
 
