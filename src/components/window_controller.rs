@@ -1,7 +1,6 @@
 use crate::libs::tray::{ handle_tray_events, TrayManager, TrayMessage };
 use crate::libs::tray_service::TRAY_UPDATE_SERVICE;
 use crate::libs::window_manager::{ WindowAction, WINDOW_MANAGER };
-use crate::{ debug_print, always_eprint };
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use std::sync::mpsc;
@@ -25,11 +24,11 @@ pub fn WindowController() -> Element {
     let _tray_init = use_resource(move || async move {
         match TrayManager::new() {
             Ok(tray) => {
-                debug_print!("✅ System tray initialized successfully");
+                log::debug!("✅ System tray initialized successfully");
                 tray_manager.set(Some(tray));
             }
             Err(e) => {
-                always_eprint!("❌ Failed to initialize system tray: {}", e);
+                log::error!("❌ Failed to initialize system tray: {}", e);
             }
         }
     });
@@ -79,7 +78,7 @@ pub fn WindowController() -> Element {
                             window_clone.set_visible(true);
                             window_clone.set_focus();
                             WINDOW_MANAGER.set_visible(true);
-                            debug_print!("🔼 Window shown from tray");
+                            log::debug!("🔼 Window shown from tray");
                         }
                         TrayMessage::ToggleMute => {
                             // Toggle the global sound enable flag
@@ -94,26 +93,26 @@ pub fn WindowController() -> Element {
                                     } else {
                                         "disabled"
                                     };
-                                    debug_print!("🔇 Sounds {} via tray menu", status); // Update tray menu to reflect new state
+                                    log::debug!("🔇 Sounds {} via tray menu", status); // Update tray menu to reflect new state
                                     tray_manager_clone.with_mut(|tray_opt| {
                                         if let Some(tray) = tray_opt {
                                             if let Err(e) = tray.update_menu() {
-                                                always_eprint!("❌ Failed to update tray menu: {}", e);
+                                                log::error!("❌ Failed to update tray menu: {}", e);
                                             }
                                         }
                                     });
                                 }
                                 Err(e) => {
-                                    always_eprint!("❌ Failed to save config after mute toggle: {}", e);
+                                    log::error!("❌ Failed to save config after mute toggle: {}", e);
                                 }
                             }
                         }
                         TrayMessage::OpenGitHub => {
                             let url = "https://github.com/hainguyents13/mechvibes-dx";
                             if let Err(e) = open::that(url) {
-                                always_eprint!("❌ Failed to open GitHub URL: {}", e);
+                                log::error!("❌ Failed to open GitHub URL: {}", e);
                             } else {
-                                debug_print!("🐙 Opened GitHub repository in browser");
+                                log::debug!("🐙 Opened GitHub repository in browser");
                             }
                         }
                         TrayMessage::OpenDiscord => {

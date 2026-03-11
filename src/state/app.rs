@@ -1,6 +1,5 @@
 // Event-driven App State Manager
 use crate::state::soundpack::SoundpackCache;
-use crate::{ debug_print, always_eprint };
 use dioxus::prelude::*;
 use once_cell::sync::OnceCell;
 use std::sync::{ Arc, Mutex };
@@ -21,7 +20,7 @@ impl PartialEq for AppState {
 
 impl AppState {
     pub fn new() -> Self {
-        debug_print!("🌍 Initializing global AppState...");
+        log::debug!("🌍 Initializing global AppState...");
         Self {
             optimized_cache: Arc::new(SoundpackCache::load()),
             last_updated: std::time::Instant::now(),
@@ -32,7 +31,7 @@ impl AppState {
         self.optimized_cache.soundpacks.values().cloned().collect()
     }
     pub fn refresh_cache(&mut self) {
-        debug_print!("🔄 Refreshing soundpack cache...");
+        log::debug!("🔄 Refreshing soundpack cache...");
         let mut fresh_cache = SoundpackCache::load();
         fresh_cache.refresh_from_directory();
         fresh_cache.save();
@@ -95,12 +94,12 @@ pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
         )
     {
         Ok(_) =>
-            debug_print!(
+            log::debug!(
                 "✅ Keyboard soundpack '{}' reloaded successfully",
                 config.keyboard_soundpack
             ),
         Err(e) => {
-            always_eprint!(
+            log::error!(
                 "❌ Failed to reload keyboard soundpack '{}': {}. Clearing selection.",
                 config.keyboard_soundpack,
                 e
@@ -117,9 +116,9 @@ pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
         )
     {
         Ok(_) =>
-            debug_print!("✅ Mouse soundpack '{}' reloaded successfully", config.mouse_soundpack),
+            log::debug!("✅ Mouse soundpack '{}' reloaded successfully", config.mouse_soundpack),
         Err(e) => {
-            always_eprint!(
+            log::error!(
                 "❌ Failed to reload mouse soundpack '{}': {}. Clearing selection.",
                 config.mouse_soundpack,
                 e
@@ -130,7 +129,7 @@ pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
     } // Save config if any changes were made
     if config_changed {
         let _ = config.save();
-        debug_print!("💾 Config updated due to failed soundpack loads");
+        log::debug!("💾 Config updated due to failed soundpack loads");
     }
 }
 

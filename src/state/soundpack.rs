@@ -156,7 +156,7 @@ impl SoundpackCache {
                     cache
                 }
                 Err(e) => {
-                    eprintln!("⚠️  Failed to load cache file: {}", e);
+                    eerror!("⚠️ Failed to load cache file: {}", e);
                     Self::new()
                 }
             };
@@ -180,7 +180,7 @@ impl SoundpackCache {
         // Ensure parent directory exists
         if let Some(parent) = Path::new(&cache_file).parent() {
             if let Err(e) = path::ensure_directory_exists(parent) {
-                eprintln!("⚠️  Failed to create cache directory: {}", e);
+                eerror!("⚠️ Failed to create cache directory: {}", e);
                 return;
             }
         }
@@ -190,7 +190,7 @@ impl SoundpackCache {
                 "💾 Saved soundpack metadata cache with {} entries",
                 self.soundpacks.len()
             ),
-            Err(e) => eprintln!("⚠️  Failed to save metadata cache: {}", e),
+            Err(e) => eerror!("⚠️ Failed to save metadata cache: {}", e),
         }
     }
 
@@ -199,7 +199,7 @@ impl SoundpackCache {
         self.soundpacks.insert(metadata.id.clone(), metadata);
     } // Refresh cache by scanning soundpacks directory
     pub fn refresh_from_directory(&mut self) {
-        println!("📂 Scanning soundpacks directories...");
+        info!("📂 Scanning soundpacks directories...");
 
         self.soundpacks.clear(); // Clear all existing entries
 

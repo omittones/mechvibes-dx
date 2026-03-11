@@ -1,5 +1,4 @@
 use crate::state::paths;
-use crate::{ debug_print, always_eprint };
 use crate::utils::platform;
 use crate::utils;
 use crate::utils::constants::{ APP_NAME_DISPLAY, APP_VERSION };
@@ -100,19 +99,19 @@ impl AppManifest {
                         }
                     }
                 Err(e) => {
-                    always_eprint!("❌ Failed to read manifest.json: {}", e);
+                    log::error!("❌ Failed to read manifest.json: {}", e);
                     let new_manifest = Self::new();
                     if let Err(e) = new_manifest.save() {
-                        always_eprint!("❌ Failed to create new manifest: {}", e);
+                        log::error!("❌ Failed to create new manifest: {}", e);
                     }
                     new_manifest
                 }
             }
         } else {
-            debug_print!("📝 Creating new app manifest");
+            log::debug!("📝 Creating new app manifest");
             let new_manifest = Self::new();
             if let Err(e) = new_manifest.save() {
-                always_eprint!("❌ Failed to create manifest.json: {}", e);
+                log::error!("❌ Failed to create manifest.json: {}", e);
             }
             new_manifest
         }

@@ -95,7 +95,7 @@ pub fn load_soundpack_metadata(
             );
         }
     } else {
-        println!("⚠️ [CACHE DEBUG] No audio_file field found in config");
+        error!("⚠️[CACHE DEBUG] No audio_file field found in config");
     }
 
     let name = config

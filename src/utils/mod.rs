@@ -5,7 +5,6 @@ pub mod config_converter;
 pub mod constants;
 pub mod data;
 pub mod delay;
-pub mod logger;
 pub mod path;
 pub mod platform;
 pub mod soundpack;

@@ -1,3 +1,5 @@
+use log::error;
+
 use crate::state::config::AppConfig;
 use crate::state::paths;
 use crate::state::soundpack::SoundPack;
@@ -36,7 +38,7 @@ pub fn load_keyboard_soundpack_with_cache_control(
 ) -> Result<(), String> {
     // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
-        println!("⚠️ Skipping keyboard soundpack loading: empty soundpack ID");
+        error!("⚠️Skipping keyboard soundpack loading: empty soundpack ID");
         return Ok(()); // Return success to avoid error handling
     }
 
@@ -62,7 +64,7 @@ pub fn load_mouse_soundpack_with_cache_control(
 ) -> Result<(), String> {
     // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
-        println!("⚠️ Skipping mouse soundpack loading: empty soundpack ID");
+        error!("⚠️Skipping mouse soundpack loading: empty soundpack ID");
         return Ok(()); // Return success to avoid error handling
     }
 
@@ -387,7 +389,7 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
                 }
             }
             Err(e) => {
-                println!("⚠️ [DEBUG] Decode error (continuing): {}", e);
+                error!("⚠️[DEBUG] Decode error (continuing): {}", e);
                 continue;
             }
         }
@@ -406,7 +408,7 @@ pub fn load_keyboard_soundpack_optimized(
     soundpack_id: &str,
     update_cache_on_error: bool,
 ) -> Result<(), String> {
-    println!("📂 Direct loading keyboard soundpack: {}", soundpack_id);
+    info!("📂 Direct loading keyboard soundpack: {}", soundpack_id);
 
     // Load soundpack directly from filesystem
     let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
@@ -446,7 +448,7 @@ pub fn load_keyboard_soundpack_optimized(
             cache.add_soundpack(metadata);
         }
         Err(e) => {
-            println!("⚠️ Failed to create metadata for {}: {}", soundpack_id, e);
+            error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
 
             // Only add error metadata to cache if requested (not during startup)
             if update_cache_on_error {
@@ -497,7 +499,7 @@ pub fn load_mouse_soundpack_optimized(
     soundpack_id: &str,
     update_cache_on_error: bool,
 ) -> Result<(), String> {
-    println!("📂 Direct loading mouse soundpack: {}", soundpack_id);
+    info!("📂 Direct loading mouse soundpack: {}", soundpack_id);
 
     // Load soundpack directly from filesystem
     let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
@@ -531,7 +533,7 @@ pub fn load_mouse_soundpack_optimized(
             cache.add_soundpack(metadata);
         }
         Err(e) => {
-            println!("⚠️ Failed to create metadata for {}: {}", soundpack_id, e);
+            error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
 
             // Only add error metadata to cache if requested (not during startup)
             if update_cache_on_error {
@@ -852,7 +854,7 @@ fn create_mouse_mappings(
 fn capture_soundpack_loading_error(soundpack_id: &str, error: &str) {
     // Skip creating cache entries for empty soundpack IDs
     if soundpack_id.is_empty() {
-        println!("⚠️ Skipping cache entry for empty soundpack ID: {}", error);
+        error!("⚠️Skipping cache entry for empty soundpack ID: {}", error);
         return;
     }
 

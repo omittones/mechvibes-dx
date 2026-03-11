@@ -15,7 +15,7 @@ pub struct SoundpackInfo {
 /// Check if a soundpack ID already exists in the app state
 pub fn check_soundpack_id_conflict(
     id: &str,
-    soundpacks: &[crate::state::soundpack::SoundpackMetadata]
+    soundpacks: &[crate::state::soundpack::SoundpackMetadata],
 ) -> bool {
     soundpacks.iter().any(|pack| pack.id == id)
 }
@@ -23,9 +23,8 @@ pub fn check_soundpack_id_conflict(
 /// Extract soundpack ID from ZIP without extracting files
 pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<String, String> {
     let file = File::open(file_path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
-    let mut archive = ZipArchive::new(file).map_err(|e|
-        format!("Failed to read ZIP archive: {}", e)
-    )?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
 
     // Find config.json to determine soundpack ID
     for i in 0..archive.len() {
@@ -36,13 +35,11 @@ pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<String, String> {
 
         if file_path.ends_with("config.json") {
             let mut config_content = String::new();
-            file
-                .read_to_string(&mut config_content)
+            file.read_to_string(&mut config_content)
                 .map_err(|e| format!("Failed to read config.json: {}", e))?;
 
             // Extract ID from config content only
-            let config: Value = serde_json
-                ::from_str(&config_content)
+            let config: Value = serde_json::from_str(&config_content)
                 .map_err(|e| format!("Failed to parse config.json: {}", e))?;
 
             // Check if the config already contains an ID field
@@ -64,9 +61,8 @@ pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<String, String> {
 pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, String> {
     // Open ZIP file
     let file = File::open(file_path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
-    let mut archive = ZipArchive::new(file).map_err(|e|
-        format!("Failed to read ZIP archive: {}", e)
-    )?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
 
     // Find config.json to determine soundpack info
     let mut config_content = String::new();
@@ -82,8 +78,7 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
 
         // Look for config.json in any directory level
         if file_path.ends_with("config.json") {
-            file
-                .read_to_string(&mut config_content)
+            file.read_to_string(&mut config_content)
                 .map_err(|e| format!("Failed to read config.json: {}", e))?;
             found_config = true;
             break;
@@ -95,8 +90,7 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
     }
 
     // Parse config to get soundpack info
-    let mut config: Value = serde_json
-        ::from_str(&config_content)
+    let mut config: Value = serde_json::from_str(&config_content)
         .map_err(|e| format!("Failed to parse config.json: {}", e))?;
 
     let soundpack_name = config
@@ -118,7 +112,11 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
         config["id"] = Value::String(soundpack_id.clone());
     } // Determine soundpack type from config
     let is_mouse_soundpack = determine_soundpack_type(&config);
-    let soundpack_type = if is_mouse_soundpack { "mouse" } else { "keyboard" };
+    let soundpack_type = if is_mouse_soundpack {
+        "mouse"
+    } else {
+        "keyboard"
+    };
 
     // Determine installation directory using soundpack type and ID
     // Custom soundpacks go to system app data directory
@@ -126,14 +124,13 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
     let install_dir = soundpacks_dir.join(soundpack_type).join(&soundpack_id);
 
     // Create installation directory
-    path
-        ::ensure_directory_exists(&install_dir)
+    path::ensure_directory_exists(&install_dir)
         .map_err(|e| format!("Failed to create soundpack directory: {}", e))?;
 
     // Extract all files
-    let mut archive = ZipArchive::new(
-        File::open(file_path).map_err(|e| format!("Failed to reopen ZIP: {}", e))?
-    ).map_err(|e| format!("Failed to reread ZIP archive: {}", e))?;
+    let mut archive =
+        ZipArchive::new(File::open(file_path).map_err(|e| format!("Failed to reopen ZIP: {}", e))?)
+            .map_err(|e| format!("Failed to reread ZIP archive: {}", e))?;
 
     for i in 0..archive.len() {
         let mut file = archive
@@ -161,17 +158,14 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
 
         // Create parent directories if needed
         if let Some(parent) = output_path.parent() {
-            path
-                ::ensure_directory_exists(parent)
+            path::ensure_directory_exists(parent)
                 .map_err(|e| format!("Failed to create directory: {}", e))?;
         }
 
         // Extract file
-        let mut output_file = File::create(&output_path).map_err(|e|
-            format!("Failed to create file: {}", e)
-        )?;
-        std::io
-            ::copy(&mut file, &mut output_file)
+        let mut output_file =
+            File::create(&output_path).map_err(|e| format!("Failed to create file: {}", e))?;
+        std::io::copy(&mut file, &mut output_file)
             .map_err(|e| format!("Failed to extract file: {}", e))?;
     } // Now handle V1 to V2 conversion after files are extracted
     println!(
@@ -181,11 +175,10 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
     let final_config_content = handle_config_conversion(
         &config.to_string(),
         &soundpack_id,
-        &install_dir.to_string_lossy()
+        &install_dir.to_string_lossy(),
     )?; // Write the final config.json at the root level of the soundpack directory
     let config_path = install_dir.join("config.json");
-    path
-        ::write_file_contents(&config_path.to_string_lossy(), &final_config_content)
+    path::write_file_contents(&config_path.to_string_lossy(), &final_config_content)
         .map_err(|e| format!("Failed to write config.json: {}", e))?;
 
     Ok(SoundpackInfo {
@@ -197,13 +190,12 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
 /// Extract and install soundpack from ZIP file with specified target type
 pub fn extract_and_install_soundpack_with_type(
     file_path: &str,
-    target_type: Option<crate::state::soundpack::SoundpackType>
+    target_type: Option<crate::state::soundpack::SoundpackType>,
 ) -> Result<SoundpackInfo, String> {
     // Open ZIP file
     let file = File::open(file_path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
-    let mut archive = ZipArchive::new(file).map_err(|e|
-        format!("Failed to read ZIP archive: {}", e)
-    )?;
+    let mut archive =
+        ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
 
     // Find config.json to determine soundpack info
     let mut config_content = String::new();
@@ -219,8 +211,7 @@ pub fn extract_and_install_soundpack_with_type(
 
         // Look for config.json in any directory level
         if file_path.ends_with("config.json") {
-            file
-                .read_to_string(&mut config_content)
+            file.read_to_string(&mut config_content)
                 .map_err(|e| format!("Failed to read config.json: {}", e))?;
             found_config = true;
             break;
@@ -232,8 +223,7 @@ pub fn extract_and_install_soundpack_with_type(
     }
 
     // Parse config to get soundpack info
-    let mut config: Value = serde_json
-        ::from_str(&config_content)
+    let mut config: Value = serde_json::from_str(&config_content)
         .map_err(|e| format!("Failed to parse config.json: {}", e))?;
 
     let soundpack_name = config
@@ -278,14 +268,13 @@ pub fn extract_and_install_soundpack_with_type(
     let install_dir = soundpacks_dir.join(soundpack_type).join(&soundpack_id);
 
     // Create installation directory
-    path
-        ::ensure_directory_exists(&install_dir)
+    path::ensure_directory_exists(&install_dir)
         .map_err(|e| format!("Failed to create soundpack directory: {}", e))?;
 
     // Extract all files
-    let mut archive = ZipArchive::new(
-        File::open(file_path).map_err(|e| format!("Failed to reopen ZIP: {}", e))?
-    ).map_err(|e| format!("Failed to reread ZIP archive: {}", e))?;
+    let mut archive =
+        ZipArchive::new(File::open(file_path).map_err(|e| format!("Failed to reopen ZIP: {}", e))?)
+            .map_err(|e| format!("Failed to reread ZIP archive: {}", e))?;
 
     for i in 0..archive.len() {
         let mut file = archive
@@ -309,27 +298,22 @@ pub fn extract_and_install_soundpack_with_type(
 
         // Create parent directory if needed
         if let Some(parent) = output_path.parent() {
-            path
-                ::ensure_directory_exists(parent)
+            path::ensure_directory_exists(parent)
                 .map_err(|e| format!("Failed to create parent directory: {}", e))?;
         }
 
         // Extract file
-        let mut output_file = File::create(&output_path).map_err(|e|
-            format!("Failed to create output file: {}", e)
-        )?;
-        std::io
-            ::copy(&mut file, &mut output_file)
+        let mut output_file = File::create(&output_path)
+            .map_err(|e| format!("Failed to create output file: {}", e))?;
+        std::io::copy(&mut file, &mut output_file)
             .map_err(|e| format!("Failed to extract file: {}", e))?;
     }
 
     // Write updated config.json with ID if it was generated
     let config_path = install_dir.join("config.json");
-    let updated_config = serde_json
-        ::to_string_pretty(&config)
+    let updated_config = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize updated config: {}", e))?;
-    std::fs
-        ::write(&config_path, updated_config)
+    std::fs::write(&config_path, updated_config)
         .map_err(|e| format!("Failed to write updated config.json: {}", e))?;
 
     Ok(SoundpackInfo {
@@ -342,17 +326,15 @@ pub fn extract_and_install_soundpack_with_type(
 fn handle_config_conversion(
     config_content: &str,
     soundpack_id: &str,
-    soundpack_dir: &str
+    soundpack_dir: &str,
 ) -> Result<String, String> {
     // Write the config content to a temporary file so we can validate it
     let temp_validate_file = format!("temp_validate_{}.json", soundpack_id);
-    std::fs
-        ::write(&temp_validate_file, config_content)
+    std::fs::write(&temp_validate_file, config_content)
         .map_err(|e| format!("Failed to write temp validation file: {}", e))?;
 
-    let validation_result = crate::utils::soundpack_validator::validate_soundpack_config(
-        &temp_validate_file
-    );
+    let validation_result =
+        crate::utils::soundpack_validator::validate_soundpack_config(&temp_validate_file);
 
     // Clean up temp validation file
     let _ = std::fs::remove_file(&temp_validate_file);
@@ -361,40 +343,48 @@ fn handle_config_conversion(
 
     println!("⚒️ Soundpack validation result: {:?}", validation_result);
 
-    if
-        validation_result.status ==
-        crate::utils::soundpack_validator::SoundpackValidationStatus::VersionOneNeedsConversion
+    if validation_result.status
+        == crate::utils::soundpack_validator::SoundpackValidationStatus::VersionOneNeedsConversion
     {
-        println!("🔄 Converting V1 soundpack '{}' to V2 format during import", soundpack_id);
+        println!(
+            "🔄 Converting V1 soundpack '{}' to V2 format during import",
+            soundpack_id
+        );
 
         // Create backup of the original V1 config before conversion
         let config_backup_path = std::path::Path::new(soundpack_dir).join("config.json.v1.backup");
         if let Err(e) = std::fs::write(&config_backup_path, config_content) {
-            println!("⚠️ Failed to create V1 config backup for {}: {}", soundpack_id, e);
+            !error(
+                "⚠️Failed to create V1 config backup for {}: {}",
+                soundpack_id,
+                e,
+            );
         } else {
-            println!("💾 Created V1 config backup at: {}", config_backup_path.display());
+            println!(
+                "💾 Created V1 config backup at: {}",
+                config_backup_path.display()
+            );
         }
 
         // Convert V1 to V2 format
         let temp_input = format!("temp_v1_{}.json", soundpack_id);
         let temp_output = format!("temp_v2_{}.json", soundpack_id);
 
-        std::fs
-            ::write(&temp_input, config_content)
+        std::fs::write(&temp_input, config_content)
             .map_err(|e| format!("Failed to write temp config: {}", e))?;
-        match
-            crate::utils::config_converter::convert_v1_to_v2(
-                &temp_input,
-                &temp_output,
-                Some(soundpack_dir)
-            )
-        {
+        match crate::utils::config_converter::convert_v1_to_v2(
+            &temp_input,
+            &temp_output,
+            Some(soundpack_dir),
+        ) {
             Ok(()) => {
-                final_config_content = std::fs
-                    ::read_to_string(&temp_output)
+                final_config_content = std::fs::read_to_string(&temp_output)
                     .map_err(|e| format!("Failed to read converted config: {}", e))?;
 
-                println!("✅ Successfully converted {} from V1 to V2 during import", soundpack_id);
+                println!(
+                    "✅ Successfully converted {} from V1 to V2 during import",
+                    soundpack_id
+                );
 
                 // Clean up temp files
                 let _ = std::fs::remove_file(&temp_input);
@@ -427,10 +417,7 @@ fn determine_soundpack_type(config: &serde_json::Value) -> bool {
     if let Some(defs) = config.get("defs") {
         if let Some(defs_obj) = defs.as_object() {
             for key in defs_obj.keys() {
-                if
-                    key.starts_with("Mouse") ||
-                    key.starts_with("Button") ||
-                    key.starts_with("Wheel")
+                if key.starts_with("Mouse") || key.starts_with("Button") || key.starts_with("Wheel")
                 {
                     return true;
                 }

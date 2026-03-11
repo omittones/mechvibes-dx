@@ -504,7 +504,7 @@ pub fn convert_v2_multi_to_single(
                             )
                         ];
                         new_key_def.insert("timing".to_string(), Value::Array(timing));
-                        println!("⚠️ Key '{}' got default timing (no timing specified)", key_name);
+                        error!("⚠️Key '{}' got default timing (no timing specified)", key_name);
                     }
 
                     new_definitions.insert(key_name, Value::Object(new_key_def));
@@ -529,7 +529,7 @@ pub fn convert_v2_multi_to_single(
                         )
                     ];
                     new_key_def.insert("timing".to_string(), Value::Array(timing));
-                    println!("⚠️ Key '{}' got default timing (no audio_file specified)", key_name);
+                    error!("⚠️Key '{}' got default timing (no audio_file specified)", key_name);
                     new_definitions.insert(key_name, Value::Object(new_key_def));
                 }
             }

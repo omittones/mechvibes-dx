@@ -7,7 +7,6 @@ use crate::libs::AudioContext;
 use crate::state::keyboard::KeyboardState;
 use crate::state::paths;
 use crate::utils::delay;
-use crate::{ debug_print, always_eprint };
 
 use dioxus::prelude::*;
 use dioxus::desktop::{ use_asset_handler, use_wry_event_handler, wry::http::Response };
@@ -49,7 +48,7 @@ pub fn app() -> Element {
         // Load current soundpacks on startup
         let ctx = audio_context.clone();
         use_effect(move || {
-            debug_print!("🎵 Loading current soundpacks on startup...");
+            log::debug!("🎵 Loading current soundpacks on startup...");
             crate::state::app::reload_current_soundpacks(&ctx);
         });
     }
@@ -61,9 +60,9 @@ pub fn app() -> Element {
                 let Ok(update_info) =
                     crate::utils::auto_updater::check_for_updates_on_startup().await
             {
-                debug_print!("🔄 Startup update check completed");
+                log::debug!("🔄 Startup update check completed");
                 if update_info.update_available {
-                    debug_print!("🆕 Update available on startup: {}", update_info.latest_version);
+                    log::info!("🆕 Update available on startup: {}", update_info.latest_version);
                 }
             }
         });
@@ -170,10 +169,10 @@ pub fn app() -> Element {
                                     Ok(_) => {
                                         // Request tray menu update to reflect the new sound state
                                         request_tray_update();
-                                        debug_print!("🔄 Sound toggled: {}", config.enable_sound);
+                                        log::debug!("🔄 Sound toggled: {}", config.enable_sound);
                                     }
                                     Err(e) => {
-                                        always_eprint!("❌ Failed to save config after sound toggle: {}", e);
+                                        log::error!("❌ Failed to save config after sound toggle: {}", e);
                                     }
                                 }
                             }
@@ -270,7 +269,7 @@ pub fn app() -> Element {
                         }
                     }
                     Err(e) => {
-                        debug_print!(
+                        log::error!(
                             "❌ Failed to read soundpack image file {:?}: {}",
                             image_path,
                             e
@@ -373,7 +372,7 @@ pub fn app() -> Element {
                         }
                     }
                     Err(e) => {
-                        debug_print!(
+                        log::error!(
                             "❌ Failed to read custom image file {:?}: {}",
                             image_path,
                             e

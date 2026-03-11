@@ -1,6 +1,6 @@
+use crate::utils::constants::{APP_NAME, APP_PROTOCOL, APP_PROTOCOL_URL};
 use std::env;
 use std::process::Command;
-use crate::utils::constants::{ APP_PROTOCOL, APP_PROTOCOL_URL, APP_NAME };
 
 #[allow(dead_code)]
 /// Register the mechvibes:// protocol for the application
@@ -8,7 +8,10 @@ use crate::utils::constants::{ APP_PROTOCOL, APP_PROTOCOL_URL, APP_NAME };
 pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let exe_path = env::current_exe()?;
     let exe_path_str = exe_path.to_string_lossy();
-    println!("🔗 Registering {}// protocol... {}", APP_PROTOCOL, exe_path_str); // Store formatted strings to avoid temporary value issues
+    println!(
+        "🔗 Registering {}// protocol... {}",
+        APP_PROTOCOL, exe_path_str
+    ); // Store formatted strings to avoid temporary value issues
     let icon_path = format!("\"{}\"", exe_path_str);
     let command_path = format!("\"{}\" \"%1\"", exe_path_str); // Registry commands to register the protocol
     let protocol_key = format!("HKCU\\Software\\Classes\\{}", APP_PROTOCOL);
@@ -17,15 +20,46 @@ pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let shell_command_key = format!("{}\\shell\\open\\command", protocol_key);
 
     let commands = vec![
-        vec!["reg", "add", &protocol_key, "/ve", "/d", &protocol_description, "/f"],
-        vec!["reg", "add", &protocol_key, "/v", "URL Protocol", "/d", "", "/f"],
-        vec!["reg", "add", &default_icon_key, "/ve", "/d", &icon_path, "/f"],
-        vec!["reg", "add", &shell_command_key, "/ve", "/d", &command_path, "/f"]
+        vec![
+            "reg",
+            "add",
+            &protocol_key,
+            "/ve",
+            "/d",
+            &protocol_description,
+            "/f",
+        ],
+        vec![
+            "reg",
+            "add",
+            &protocol_key,
+            "/v",
+            "URL Protocol",
+            "/d",
+            "",
+            "/f",
+        ],
+        vec![
+            "reg",
+            "add",
+            &default_icon_key,
+            "/ve",
+            "/d",
+            &icon_path,
+            "/f",
+        ],
+        vec![
+            "reg",
+            "add",
+            &shell_command_key,
+            "/ve",
+            "/d",
+            &command_path,
+            "/f",
+        ],
     ];
     for cmd in commands {
-        let output = Command::new(cmd[0])
-            .args(&cmd[1..])
-            .output()?;
+        let output = Command::new(cmd[0]).args(&cmd[1..]).output()?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
@@ -54,8 +88,7 @@ pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
         </dict>
     </array>
 "#,
-        APP_NAME,
-        APP_PROTOCOL
+        APP_NAME, APP_PROTOCOL
     );
     Ok(())
 }
@@ -67,8 +100,7 @@ pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let home = env::var("HOME")?;
     let desktop_file_path = format!(
         "{}/.local/share/applications/{}.desktop",
-        home,
-        APP_NAME_LOWERCASE
+        home, APP_NAME_LOWERCASE
     );
     let exe_path = env::current_exe()?;
 
@@ -96,7 +128,9 @@ Categories=AudioVideo;Utility;
     fs::write(&desktop_file_path, desktop_content)?;
 
     // Update desktop database
-    let _output = Command::new("update-desktop-database").arg(&apps_dir).output();
+    let _output = Command::new("update-desktop-database")
+        .arg(&apps_dir)
+        .output();
 
     println!("✅ Protocol {}// registered successfully", APP_PROTOCOL);
     Ok(())
@@ -174,19 +208,25 @@ fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn s
         println!("✅ Installed and activated soundpack: {}", soundpack_name);
     } else {
         // For real implementation, we would download it here
-        println!("⚠️ Soundpack not found locally: {}. Would download in production.", soundpack_name);
+        !error(
+            "⚠️Soundpack not found locally: {}. Would download in production.",
+            soundpack_name,
+        );
         // Create a placeholder for testing
         fs::create_dir_all(&soundpack_path)?;
         fs::write(
             soundpack_path.join("config.json"),
-            format!(r#"{{
+            format!(
+                r#"{{
   "name": "Test Soundpack - {}",
   "author": "Protocol Test",
   "version": "1.0.0",
   "key_define": {{
     "default": "sound.ogg"
   }}
-}}"#, soundpack_name)
+}}"#,
+                soundpack_name
+            ),
         )?;
 
         // Create a placeholder sound file by copying from an existing soundpack
@@ -208,7 +248,10 @@ fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn s
             return Err(e.into());
         }
 
-        println!("✅ Created and activated placeholder soundpack: {}", soundpack_name);
+        println!(
+            "✅ Created and activated placeholder soundpack: {}",
+            soundpack_name
+        );
     }
 
     Ok(())
@@ -221,17 +264,24 @@ fn import_theme_from_protocol(theme_data: &str) -> Result<(), Box<dyn std::error
     use crate::state::themes::CustomThemeData;
     use crate::utils::theme::get_themes_config;
     use chrono::Utc;
-    use std::time::{ SystemTime, UNIX_EPOCH };
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     println!("📥 Importing theme from protocol data");
 
     // In a real implementation, this would decode the base64 data
     // For testing purposes, we'll create a simple theme
 
-    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 
     let theme_id = format!("imported-{}", timestamp);
-    let theme_name = if theme_data.is_empty() { "Imported Theme" } else { theme_data };
+    let theme_name = if theme_data.is_empty() {
+        "Imported Theme"
+    } else {
+        theme_data
+    };
 
     let mut themes_config = get_themes_config();
 
@@ -247,7 +297,9 @@ fn import_theme_from_protocol(theme_data: &str) -> Result<(), Box<dyn std::error
     };
 
     // Add theme to custom_themes map
-    themes_config.custom_themes.insert(theme_id.clone(), new_theme);
+    themes_config
+        .custom_themes
+        .insert(theme_id.clone(), new_theme);
 
     // Save the themes config
     if let Err(e) = themes_config.save() {

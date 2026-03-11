@@ -23,18 +23,18 @@ fn get_app_root() -> &'static PathBuf {
                 if exe_path_str.contains("target\\dx\\") || exe_path_str.contains("target/dx/") {
                     // In dev mode, use current working directory (project root)
                     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-                    println!("📂 App root (dev mode - from cwd): {}", cwd.display());
+                    info!("📂 App root (dev mode - from cwd): {}", cwd.display());
                     return cwd;
                 }
 
-                println!("📂 App root (from exe): {}", exe_dir.display());
+                info!("📂 App root (from exe): {}", exe_dir.display());
                 return exe_dir.to_path_buf();
             }
         }
 
         // Fallback to current working directory (for development)
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-        println!("📂 App root (fallback - from cwd): {}", cwd.display());
+        info!("📂 App root (fallback - from cwd): {}", cwd.display());
         cwd
     })
 }
@@ -111,31 +111,6 @@ pub mod soundpacks {
     use super::{get_app_root, get_system_app_data_dir};
     use std::path::{Path, PathBuf};
 
-    /// List of built-in soundpack IDs that ship with the app
-    /// These are stored in the app root soundpacks directory
-    pub const BUILTIN_SOUNDPACKS: &[&str] = &[
-        "keyboard/cherrymx-black-abs",
-        "keyboard/cherrymx-black-pbt",
-        "keyboard/cherrymx-blue-abs",
-        "keyboard/cherrymx-blue-pbt",
-        "keyboard/cherrymx-brown-abs",
-        "keyboard/cherrymx-brown-pbt",
-        "keyboard/cherrymx-red-abs",
-        "keyboard/cherrymx-red-pbt",
-        "keyboard/eg-crystal-purple",
-        "keyboard/eg-oreo",
-        "keyboard/topre-purple-hybrid-pbt",
-        "mouse/chat",
-        "mouse/ping",
-        "mouse/vibrate",
-        "mouse/wooden",
-    ];
-
-    /// Check if a soundpack ID is a built-in soundpack
-    pub fn is_builtin_soundpack(soundpack_id: &str) -> bool {
-        BUILTIN_SOUNDPACKS.contains(&soundpack_id)
-    }
-
     /// Get the base soundpacks directory for built-in soundpacks (app root)
     pub fn get_builtin_soundpacks_dir() -> PathBuf {
         get_app_root().join("soundpacks")
@@ -153,30 +128,21 @@ pub mod soundpacks {
         // Normalize the soundpack_id by splitting on both / and \ and rejoining with PathBuf
         let parts: Vec<&str> = soundpack_id.split(&['/', '\\'][..]).collect();
 
-        // Check if it's a built-in soundpack
-        if is_builtin_soundpack(soundpack_id) {
+        // Check custom location first
+        let mut custom_path = get_custom_soundpacks_dir();
+        for part in &parts {
+            custom_path = custom_path.join(part);
+        }
+
+        if custom_path.exists() {
+            custom_path.to_string_lossy().to_string()
+        } else {
+            // Fallback to built-in location
             let mut path = get_builtin_soundpacks_dir();
             for part in parts {
                 path = path.join(part);
             }
             path.to_string_lossy().to_string()
-        } else {
-            // Check custom location first
-            let mut custom_path = get_custom_soundpacks_dir();
-            for part in &parts {
-                custom_path = custom_path.join(part);
-            }
-
-            if custom_path.exists() {
-                custom_path.to_string_lossy().to_string()
-            } else {
-                // Fallback to built-in location (for backwards compatibility)
-                let mut builtin_path = get_builtin_soundpacks_dir();
-                for part in parts {
-                    builtin_path = builtin_path.join(part);
-                }
-                builtin_path.to_string_lossy().to_string()
-            }
         }
     }
 
@@ -185,44 +151,6 @@ pub mod soundpacks {
     pub fn config_json(soundpack_id: &str) -> String {
         Path::new(&soundpack_dir(soundpack_id))
             .join("config.json")
-            .to_string_lossy()
-            .to_string()
-    }
-
-    /// Get the base soundpacks directory (containing keyboard/ and mouse/ folders)
-    /// Returns built-in soundpacks directory
-    pub fn get_soundpacks_dir() -> String {
-        get_builtin_soundpacks_dir().to_string_lossy().to_string()
-    }
-
-    /// Get keyboard soundpacks directory (built-in)
-    pub fn keyboard_soundpacks_dir() -> String {
-        get_builtin_soundpacks_dir()
-            .join("keyboard")
-            .to_string_lossy()
-            .to_string()
-    }
-
-    /// Get mouse soundpacks directory (built-in)
-    pub fn mouse_soundpacks_dir() -> String {
-        get_builtin_soundpacks_dir()
-            .join("mouse")
-            .to_string_lossy()
-            .to_string()
-    }
-
-    /// Get custom keyboard soundpacks directory (system app data)
-    pub fn custom_keyboard_soundpacks_dir() -> String {
-        get_custom_soundpacks_dir()
-            .join("keyboard")
-            .to_string_lossy()
-            .to_string()
-    }
-
-    /// Get custom mouse soundpacks directory (system app data)
-    pub fn custom_mouse_soundpacks_dir() -> String {
-        get_custom_soundpacks_dir()
-            .join("mouse")
             .to_string_lossy()
             .to_string()
     }
@@ -239,7 +167,7 @@ pub mod soundpacks {
 
         if !builtin_soundpacks_dir.exists() {
             fs::create_dir_all(&builtin_soundpacks_dir)?;
-            crate::debug_print!(
+            log::debug!(
                 "📁 Created built-in soundpacks directory: {}",
                 builtin_soundpacks_dir.display()
             );
@@ -247,7 +175,7 @@ pub mod soundpacks {
 
         if !builtin_keyboard_dir.exists() {
             fs::create_dir_all(&builtin_keyboard_dir)?;
-            crate::debug_print!(
+            log::debug!(
                 "⌨️ Created built-in keyboard soundpacks directory: {}",
                 builtin_keyboard_dir.display()
             );
@@ -255,7 +183,7 @@ pub mod soundpacks {
 
         if !builtin_mouse_dir.exists() {
             fs::create_dir_all(&builtin_mouse_dir)?;
-            crate::debug_print!(
+            log::debug!(
                 "🖱️ Created built-in mouse soundpacks directory: {}",
                 builtin_mouse_dir.display()
             );
@@ -268,7 +196,7 @@ pub mod soundpacks {
 
         if !custom_soundpacks_dir.exists() {
             fs::create_dir_all(&custom_soundpacks_dir)?;
-            crate::debug_print!(
+            log::debug!(
                 "📁 Created custom soundpacks directory: {}",
                 custom_soundpacks_dir.display()
             );
@@ -276,7 +204,7 @@ pub mod soundpacks {
 
         if !custom_keyboard_dir.exists() {
             fs::create_dir_all(&custom_keyboard_dir)?;
-            crate::debug_print!(
+            log::debug!(
                 "⌨️ Created custom keyboard soundpacks directory: {}",
                 custom_keyboard_dir.display()
             );
@@ -284,7 +212,7 @@ pub mod soundpacks {
 
         if !custom_mouse_dir.exists() {
             fs::create_dir_all(&custom_mouse_dir)?;
-            crate::debug_print!(
+            log::debug!(
                 "🖱️ Created custom mouse soundpacks directory: {}",
                 custom_mouse_dir.display()
             );

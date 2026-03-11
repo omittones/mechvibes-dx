@@ -34,14 +34,14 @@ fn load_icon() -> Option<dioxus::desktop::tao::window::Icon> {
         Ok(img) => {
             let rgba = img.to_rgba8();
             let (width, height) = rgba.dimensions();
-            debug_print!("📐 Loaded icon from ICO: {}x{}", width, height);
+            log::debug!("📐 Loaded icon from ICO: {}x{}", width, height);
 
             // Always resize to 32x32 for maximum Windows taskbar compatibility
             // This is the standard size Windows expects for taskbar icons
             let target_size = 32u32;
 
             let final_rgba = if width != target_size || height != target_size {
-                debug_print!(
+                log::debug!(
                     "🔄 Resizing icon from {}x{} to {}x{} for Windows taskbar",
                     width,
                     height,
@@ -55,7 +55,7 @@ fn load_icon() -> Option<dioxus::desktop::tao::window::Icon> {
                     image::imageops::FilterType::Lanczos3,
                 )
             } else {
-                debug_print!("✅ Icon already at optimal size ({}x{})", width, height);
+                log::debug!("✅ Icon already at optimal size ({}x{})", width, height);
                 rgba
             };
 
@@ -65,7 +65,7 @@ fn load_icon() -> Option<dioxus::desktop::tao::window::Icon> {
                 target_size,
             ) {
                 Ok(icon) => {
-                    debug_print!(
+                    log::debug!(
                         "✅ Successfully created window icon ({}x{})",
                         target_size,
                         target_size
@@ -73,37 +73,34 @@ fn load_icon() -> Option<dioxus::desktop::tao::window::Icon> {
                     Some(icon)
                 }
                 Err(e) => {
-                    always_eprint!("❌ Failed to create window icon from RGBA data: {}", e);
+                    log::error!("❌ Failed to create window icon from RGBA data: {}", e);
                     None
                 }
             }
         }
         Err(e) => {
-            always_eprint!("❌ Failed to load embedded ICO data: {}", e);
+            log::error!("❌ Failed to load embedded ICO data: {}", e);
             None
         }
     }
 }
 
 fn main() {
-    // Initialize debug logging first
-    utils::logger::init_debug_logging();
-
     env_logger::init();
 
-    debug_print!("🚀 Initializing {}...", APP_NAME);
+    log::info!("🚀 Initializing {}...", APP_NAME);
 
     // Initialize app manifest first
     let _manifest = state::manifest::AppManifest::load();
 
     // Ensure soundpack directories exist
     if let Err(e) = state::paths::soundpacks::ensure_soundpack_directories() {
-        debug_eprint!("⚠️ Failed to create soundpack directories: {}", e);
+        log::warn!("⚠️ Failed to create soundpack directories: {}", e);
     }
 
     // Check for command line arguments (protocol handling and startup options)
     let args: Vec<String> = std::env::args().collect();
-    debug_print!("🔍 Command line args: {:?}", args);
+    log::debug!("🔍 Command line args: {:?}", args);
 
     // Check if we should start minimized (from auto-startup)
     let should_start_minimized = args.contains(&"--minimized".to_string())
@@ -119,14 +116,14 @@ fn main() {
 
     // Initialize music player
     if let Err(e) = state::music::initialize_music_player() {
-        debug_eprint!("⚠️ Failed to initialize music player: {}", e);
+        log::warn!("⚠️ Failed to initialize music player: {}", e);
     } else {
-        debug_print!("🎵 Music player initialized successfully");
+        log::info!("🎵 Music player initialized successfully");
     }
 
     // Initialize ambiance player
     state::ambiance::initialize_global_ambiance_player();
-    debug_print!("🎵 Ambiance player initialized");
+    log::info!("🎵 Ambiance player initialized");
 
     // Note: Update service will be initialized within the UI components
     // to ensure proper Dioxus runtime context
@@ -155,7 +152,7 @@ fn main() {
     // If window starts visible (not minimized), it will be focused
     let initial_focus_state = !should_start_minimized;
     init_window_focus_state_with_value(initial_focus_state);
-    debug_print!(
+    log::debug!(
         "🔍 Initial window focus state: {}",
         if initial_focus_state {
             "FOCUSED"
@@ -169,7 +166,7 @@ fn main() {
     let display_server = std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "x11".to_string());
 
     #[cfg(target_os = "linux")]
-    debug_print!("🔍 Detected display server: {}", display_server);
+    log::debug!("🔍 Detected display server: {}", display_server);
 
     // Start input listeners based on platform and display server
     #[cfg(target_os = "linux")]
@@ -177,13 +174,13 @@ fn main() {
         if display_server == "wayland" {
             // On Wayland, use evdev for keyboard input (works both focused and unfocused)
             // evdev also handles hotkey detection (Ctrl+Alt+M)
-            debug_print!("🎮 Starting evdev keyboard listener (Wayland mode)...");
+            log::debug!("🎮 Starting evdev keyboard listener (Wayland mode)...");
             let focus_state = get_window_focus_state();
             start_evdev_keyboard_listener(keyboard_tx.clone(), hotkey_tx.clone(), focus_state);
 
             // Use rdev for mouse events only (no keyboard/hotkeys on Wayland)
             // Pass "always focused" state to prevent rdev from sending keyboard events
-            debug_print!("🎮 Starting unified input listener for mouse events (Wayland mode)...");
+            log::debug!("🎮 Starting unified input listener for mouse events (Wayland mode)...");
             let always_focused = Arc::new(Mutex::new(true));
             start_unified_input_listener(keyboard_tx, mouse_tx, hotkey_tx, Some(always_focused));
         } else {
@@ -191,7 +188,7 @@ fn main() {
             // rdev handles keyboard when unfocused, device_query when focused
             let focus_state = get_window_focus_state();
 
-            debug_print!("🎮 Starting unified input listener (X11 mode - unfocused)...");
+            log::debug!("🎮 Starting unified input listener (X11 mode - unfocused)...");
             start_unified_input_listener(
                 keyboard_tx.clone(),
                 mouse_tx,
@@ -199,7 +196,7 @@ fn main() {
                 Some(focus_state.clone()),
             );
 
-            debug_print!("🎮 Starting focused keyboard listener (X11 mode - focused)...");
+            log::debug!("🎮 Starting focused keyboard listener (X11 mode - focused)...");
             start_focused_keyboard_listener(keyboard_tx, focus_state);
         }
     }
@@ -210,7 +207,7 @@ fn main() {
     {
         let focus_state = get_window_focus_state();
 
-        debug_print!("🎮 Starting unified input listener (unfocused)...");
+        log::debug!("🎮 Starting unified input listener (unfocused)...");
         start_unified_input_listener(
             keyboard_tx.clone(),
             mouse_tx,
@@ -218,7 +215,7 @@ fn main() {
             Some(focus_state.clone()),
         );
 
-        debug_print!("🎮 Starting focused keyboard listener (focused)...");
+        log::debug!("🎮 Starting focused keyboard listener (focused)...");
         start_focused_keyboard_listener(keyboard_tx, focus_state);
     }
 
@@ -235,7 +232,7 @@ fn main() {
     // Load icon before creating window
     let window_icon = load_icon();
     if window_icon.is_none() {
-        always_eprint!("⚠️ Warning: Failed to load window icon - taskbar icon may not appear");
+        log::warn!("⚠️ Warning: Failed to load window icon - taskbar icon may not appear");
     }
 
     // Create a WindowBuilder with custom appearance and vertical resizing
