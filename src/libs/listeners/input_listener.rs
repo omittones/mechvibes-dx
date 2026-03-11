@@ -202,7 +202,10 @@ pub fn start_unified_input_listener(
                                     log::info!(
                                         "🔥 Hotkey detected: Ctrl+Alt+M - Toggling global sound"
                                     );
-                                    let _ = hotkey_tx.send("TOGGLE_SOUND".to_string());
+                                    match hotkey_tx.send("TOGGLE_SOUND".to_string()) {
+                                        Ok(()) => log::debug!("[rdev] Hotkey event sent successfully"),
+                                        Err(e) => log::error!("[rdev] Failed to send hotkey event: {}", e),
+                                    }
                                     return; // Don't process this as a regular key event
                                 }
                             }
@@ -235,8 +238,13 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            let _ = keyboard_tx.send(key_code.to_string());
+                            match keyboard_tx.send(key_code.to_string()) {
+                                Ok(()) => log::debug!("[rdev] Key press detected: {}", key_code),
+                                Err(e) => log::error!("[rdev] Failed to send key press '{}': {}", key_code, e),
+                            }
                         }
+                    } else {
+                        log::debug!("[rdev] Ignored unmapped key press: {:?}", key);
                     }
                 }
                 EventType::KeyRelease(key) => {
@@ -265,7 +273,12 @@ pub fn start_unified_input_listener(
                         pressed.remove(&key_code.to_string());
                         drop(pressed);
 
-                        let _ = keyboard_tx.send(format!("UP:{}", key_code));
+                        match keyboard_tx.send(format!("UP:{}", key_code)) {
+                            Ok(()) => log::debug!("[rdev] Key release detected: {}", key_code),
+                            Err(e) => log::error!("[rdev] Failed to send key release '{}': {}", key_code, e),
+                        }
+                    } else {
+                        log::debug!("[rdev] Ignored unmapped key release: {:?}", key);
                     }
                 }
 
@@ -300,8 +313,13 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            let _ = mouse_tx.send(button_code.to_string());
+                            match mouse_tx.send(button_code.to_string()) {
+                                Ok(()) => log::debug!("[rdev] Mouse press detected: {}", button_code),
+                                Err(e) => log::error!("[rdev] Failed to send mouse press '{}': {}", button_code, e),
+                            }
                         }
+                    } else {
+                        log::debug!("[rdev] Ignored unmapped/unknown mouse button: {:?}", button);
                     }
                 }
                 EventType::ButtonRelease(button) => {
@@ -314,7 +332,12 @@ pub fn start_unified_input_listener(
                         pressed.remove(&button_code.to_string());
                         drop(pressed);
 
-                        let _ = mouse_tx.send(format!("UP:{}", button_code));
+                        match mouse_tx.send(format!("UP:{}", button_code)) {
+                            Ok(()) => log::debug!("[rdev] Mouse release detected: {}", button_code),
+                            Err(e) => log::error!("[rdev] Failed to send mouse release '{}': {}", button_code, e),
+                        }
+                    } else {
+                        log::debug!("[rdev] Ignored unmapped/unknown mouse button release: {:?}", button);
                     }
                 }
                 // Skip mouse wheel events for now

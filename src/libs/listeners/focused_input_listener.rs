@@ -155,8 +155,12 @@ pub fn start_focused_keyboard_listener(keyboard_tx: Sender<String>, is_focused: 
                 for key in current_keys.difference(&prev_keys) {
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
-                        // Send key event without logging sensitive keystrokes
-                        let _ = keyboard_tx.send(key_code.to_string());
+                        match keyboard_tx.send(key_code.to_string()) {
+                            Ok(()) => log::debug!("[focused] Key press detected: {}", key_code),
+                            Err(e) => log::error!("[focused] Failed to send key press '{}': {}", key_code, e),
+                        }
+                    } else {
+                        log::debug!("[focused] Ignored unmapped key press: {:?}", key);
                     }
                 }
 
@@ -164,7 +168,12 @@ pub fn start_focused_keyboard_listener(keyboard_tx: Sender<String>, is_focused: 
                 for key in prev_keys.difference(&current_keys) {
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
-                        let _ = keyboard_tx.send(format!("UP:{}", key_code));
+                        match keyboard_tx.send(format!("UP:{}", key_code)) {
+                            Ok(()) => log::debug!("[focused] Key release detected: {}", key_code),
+                            Err(e) => log::error!("[focused] Failed to send key release '{}': {}", key_code, e),
+                        }
+                    } else {
+                        log::debug!("[focused] Ignored unmapped key release: {:?}", key);
                     }
                 }
 
