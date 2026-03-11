@@ -1,8 +1,8 @@
-use crate::state::config::AppConfig;
 use crate::libs::device_manager::DeviceManager;
-use rodio::{ OutputStream, OutputStreamHandle, Sink };
+use crate::state::config::AppConfig;
+use rodio::{OutputStream, OutputStreamHandle, Sink};
 use std::collections::HashMap;
-use std::sync::{ Arc, Mutex };
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 static AUDIO_VOLUME: std::sync::OnceLock<Mutex<f32>> = std::sync::OnceLock::new();
@@ -43,43 +43,36 @@ impl AudioContext {
 
         // Try to use selected device or fall back to default
         let (stream, stream_handle) = match &config.selected_audio_device {
-            Some(device_id) => {
-                match device_manager.get_output_device_by_id(device_id) {
-                    Ok(Some(device)) => {
-                        match rodio::OutputStream::try_from_device(&device) {
-                            Ok((stream, handle)) => (stream, handle),
-                            Err(e) => {
-                                log::error!(
-                                    "❌ Failed to create stream from selected device {}: {}",
-                                    device_id,
-                                    e
-                                );
-                                log::error!("🔄 Falling back to default device...");
-                                rodio::OutputStream
-                                    ::try_default()
-                                    .expect("Failed to create default audio output stream")
-                            }
-                        }
-                    }
-                    Ok(None) => {
-                        log::error!("❌ Selected audio device {} not found, using default", device_id);
-                        rodio::OutputStream
-                            ::try_default()
-                            .expect("Failed to create default audio output stream")
-                    }
+            Some(device_id) => match device_manager.get_output_device_by_id(device_id) {
+                Ok(Some(device)) => match rodio::OutputStream::try_from_device(&device) {
+                    Ok((stream, handle)) => (stream, handle),
                     Err(e) => {
-                        log::error!("❌ Error accessing selected device {}: {}", device_id, e);
-                        rodio::OutputStream
-                            ::try_default()
+                        log::error!(
+                            "❌ Failed to create stream from selected device {}: {}",
+                            device_id,
+                            e
+                        );
+                        log::error!("🔄 Falling back to default device...");
+                        rodio::OutputStream::try_default()
                             .expect("Failed to create default audio output stream")
                     }
+                },
+                Ok(None) => {
+                    log::error!(
+                        "❌ Selected audio device {} not found, using default",
+                        device_id
+                    );
+                    rodio::OutputStream::try_default()
+                        .expect("Failed to create default audio output stream")
                 }
-            }
-            None => {
-                rodio::OutputStream
-                    ::try_default()
-                    .expect("Failed to create default audio output stream")
-            }
+                Err(e) => {
+                    log::error!("❌ Error accessing selected device {}: {}", device_id, e);
+                    rodio::OutputStream::try_default()
+                        .expect("Failed to create default audio output stream")
+                }
+            },
+            None => rodio::OutputStream::try_default()
+                .expect("Failed to create default audio output stream"),
         };
 
         let context = Self {
@@ -131,7 +124,8 @@ impl AudioContext {
     }
 
     pub fn get_volume(&self) -> f32 {
-        AUDIO_VOLUME.get()
+        AUDIO_VOLUME
+            .get()
             .and_then(|v| v.lock().ok())
             .map(|v| *v)
             .unwrap_or(1.0)
@@ -157,43 +151,38 @@ impl AudioContext {
     }
 
     pub fn get_mouse_volume(&self) -> f32 {
-        MOUSE_AUDIO_VOLUME.get()
+        MOUSE_AUDIO_VOLUME
+            .get()
             .and_then(|v| v.lock().ok())
             .map(|v| *v)
             .unwrap_or(1.0)
     }
+
     pub fn create_with_device(device_id: Option<String>) -> Result<Self, String> {
         // Initialize device manager
         let device_manager = DeviceManager::new();
 
         // Create stream with selected device
         let (stream, stream_handle) = match &device_id {
-            Some(id) => {
-                match device_manager.get_output_device_by_id(id) {
-                    Ok(Some(device)) => {
-                        match rodio::OutputStream::try_from_device(&device) {
-                            Ok((stream, handle)) => (stream, handle),
-                            Err(e) => {
-                                log::error!("❌ Failed to create stream from device {}: {}", id, e);
-                                return Err(format!("Failed to use device: {}", e));
-                            }
-                        }
-                    }
-                    Ok(None) => {
-                        log::error!("❌ Device {} not found", id);
-                        return Err(format!("Device not found: {}", id));
-                    }
+            Some(id) => match device_manager.get_output_device_by_id(id) {
+                Ok(Some(device)) => match rodio::OutputStream::try_from_device(&device) {
+                    Ok((stream, handle)) => (stream, handle),
                     Err(e) => {
-                        log::error!("❌ Error accessing device {}: {}", id, e);
-                        return Err(format!("Error accessing device: {}", e));
+                        log::error!("❌ Failed to create stream from device {}: {}", id, e);
+                        return Err(format!("Failed to use device: {}", e));
                     }
+                },
+                Ok(None) => {
+                    log::error!("❌ Device {} not found", id);
+                    return Err(format!("Device not found: {}", id));
                 }
-            }
-            None => {
-                rodio::OutputStream
-                    ::try_default()
-                    .map_err(|e| format!("Failed to create default stream: {}", e))?
-            }
+                Err(e) => {
+                    log::error!("❌ Error accessing device {}: {}", id, e);
+                    return Err(format!("Error accessing device: {}", e));
+                }
+            },
+            None => rodio::OutputStream::try_default()
+                .map_err(|e| format!("Failed to create default stream: {}", e))?,
         };
 
         let context = Self {
@@ -233,9 +222,10 @@ impl AudioContext {
     pub fn test_current_device(&self) -> bool {
         let config = AppConfig::load();
         match &config.selected_audio_device {
-            Some(device_id) => {
-                self.device_manager.test_output_device(device_id).unwrap_or(false)
-            }
+            Some(device_id) => self
+                .device_manager
+                .test_output_device(device_id)
+                .unwrap_or(false),
             None => true, // Default device is always considered available
         }
     }

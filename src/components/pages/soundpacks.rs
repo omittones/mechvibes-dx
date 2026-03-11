@@ -1,10 +1,10 @@
 use crate::{
-    components::ui::{ PageHeader, SoundpackImportModal, SoundpackManager, SoundpackTable },
-    state::app::{ use_app_state, use_state_trigger },
+    components::ui::{PageHeader, SoundpackImportModal, SoundpackManager, SoundpackTable},
+    state::app::{use_app_state, use_state_trigger},
 };
 use dioxus::document::eval;
 use dioxus::prelude::*;
-use lucide_dioxus::{ Keyboard, Mouse, Music, Settings2 };
+use lucide_dioxus::{Keyboard, Mouse, Music, Settings2};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -23,7 +23,10 @@ pub fn Soundpacks() -> Element {
 
     // Get all soundpacks (this will be reactive to app_state changes)
     let all_soundpacks = app_state.get_soundpacks();
-    log::debug!("🔄 Soundpacks component rendering with {} soundpacks", all_soundpacks.len()); // Filter soundpacks by type (these will update when all_soundpacks changes)
+    log::debug!(
+        "🔄 Soundpacks component rendering with {} soundpacks",
+        all_soundpacks.len()
+    ); // Filter soundpacks by type (these will update when all_soundpacks changes)
     let keyboard_soundpacks: Vec<_> = all_soundpacks
         .iter()
         .filter(|pack| pack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard)
@@ -36,7 +39,8 @@ pub fn Soundpacks() -> Element {
         .cloned()
         .collect();
 
-    log::info!("🔄 Filtered: {} keyboard, {} mouse soundpacks",
+    log::debug!(
+        "🔄 Filtered: {} keyboard, {} mouse soundpacks",
         keyboard_soundpacks.len(),
         mouse_soundpacks.len()
     );
@@ -82,8 +86,8 @@ pub fn Soundpacks() -> Element {
 
           // Mouse tab
           label { class: "tab [--tab-border-color:var(--color-base-300)] [--tab-bg:var(--color-base-200)]",
-            input { 
-              r#type: "radio", 
+            input {
+              r#type: "radio",
               name: "soundpack-tab",
               checked: current_tab() == TabType::Mouse,
               onchange: move |_| {
@@ -108,8 +112,8 @@ pub fn Soundpacks() -> Element {
 
           // Manage tab
           label { class: "tab [--tab-border-color:var(--color-base-300)] [--tab-bg:var(--color-base-200)]",
-            input { 
-              r#type: "radio", 
+            input {
+              r#type: "radio",
               name: "soundpack-tab",
               checked: current_tab() == TabType::Manage,
               onchange: move |_| {

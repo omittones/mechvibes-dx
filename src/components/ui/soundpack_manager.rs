@@ -57,8 +57,9 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
     };
 
     // Get current counts from cache
-    let soundpack_count_keyboard = app_state.optimized_cache.count.keyboard;
-    let soundpack_count_mouse = app_state.optimized_cache.count.mouse;
+    let soundpack_count_keyboard = app_state.count_keyboard_soundpacks();
+    let soundpack_count_mouse = app_state.count_mouse_soundpacks();
+    let last_scan = app_state.get_last_scan();
 
     rsx! {
       div { class: "space-y-4",
@@ -100,9 +101,9 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
                 "Refresh"
               }
             } // Last scan info
-            if app_state.optimized_cache.last_scan > 0 {
+            if last_scan > 0 {
               div { class: "text-xs text-base-content/60",
-                "Last scan: {crate::utils::time::format_relative_time(app_state.optimized_cache.last_scan)}"
+                "Last scan: {crate::utils::time::format_relative_time(last_scan)}"
               }
             }
           }

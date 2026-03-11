@@ -7,14 +7,14 @@ use std::sync::{Arc, Mutex};
 // Global app state for sharing between components
 #[derive(Clone, Debug)]
 pub struct AppState {
-    pub optimized_cache: Arc<SoundpackCache>,
-    pub last_updated: std::time::Instant,
+    soundpack_cache: Arc<SoundpackCache>,
+    last_updated: std::time::Instant,
 }
 
 impl PartialEq for AppState {
     fn eq(&self, other: &Self) -> bool {
         // Compare cache contents, ignoring timestamp for reactivity purposes
-        Arc::ptr_eq(&self.optimized_cache, &other.optimized_cache)
+        Arc::ptr_eq(&self.soundpack_cache, &other.soundpack_cache)
     }
 }
 
@@ -22,20 +22,33 @@ impl AppState {
     pub fn new() -> Self {
         log::debug!("🌍 Initializing global AppState...");
         Self {
-            optimized_cache: Arc::new(SoundpackCache::load()),
+            soundpack_cache: Arc::new(SoundpackCache::load()),
             last_updated: std::time::Instant::now(),
         }
     }
 
-    pub fn get_soundpacks(&self) -> Vec<crate::state::soundpack::SoundpackMetadata> {
-        self.optimized_cache.soundpacks.values().cloned().collect()
+    pub fn count_keyboard_soundpacks(&self) -> usize {
+        self.soundpack_cache.count.keyboard
     }
+
+    pub fn count_mouse_soundpacks(&self) -> usize {
+        self.soundpack_cache.count.mouse
+    }
+
+    pub fn get_last_scan(&self) -> u64 {
+        self.soundpack_cache.last_scan
+    }
+
+    pub fn get_soundpacks(&self) -> Vec<crate::state::soundpack::SoundpackMetadata> {
+        self.soundpack_cache.soundpacks.values().cloned().collect()
+    }
+
     pub fn refresh_cache(&mut self) {
         log::debug!("🔄 Refreshing soundpack cache...");
         let mut fresh_cache = SoundpackCache::load();
         fresh_cache.refresh_from_directory();
         fresh_cache.save();
-        self.optimized_cache = Arc::new(fresh_cache);
+        self.soundpack_cache = Arc::new(fresh_cache);
         self.last_updated = std::time::Instant::now();
     }
 }
@@ -175,8 +188,10 @@ pub fn init_update_state() {
 
         // Load saved update info from config if available
         if let Some(saved_update) = crate::utils::auto_updater::get_saved_update_info() {
-            log::info!("📦 Found saved update info: {} -> {}",
-                saved_update.current_version, saved_update.latest_version
+            log::info!(
+                "📦 Found saved update info: {} -> {}",
+                saved_update.current_version,
+                saved_update.latest_version
             );
             set_update_info(Some(saved_update));
         }

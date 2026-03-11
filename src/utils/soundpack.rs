@@ -1,5 +1,5 @@
 use crate::state::paths;
-use crate::state::soundpack::SoundpackMetadata;
+use crate::state::soundpack::{SoundpackMetadata, SoundpackType};
 use crate::utils::config_converter;
 use crate::utils::soundpack_validator::{SoundpackValidationStatus, validate_soundpack_config};
 use std::fs;
@@ -178,19 +178,10 @@ pub fn load_soundpack_metadata(
                 Some(String::new()) // Empty string if no icon specified
             }
         },
-        soundpack_type: {
-            // Determine soundpack type based on folder path (more reliable than JSON content)
-            if soundpack_id.starts_with("keyboard/") || soundpack_id.starts_with("keyboard\\") {
-                crate::state::soundpack::SoundpackType::Keyboard
-            } else if soundpack_id.starts_with("mouse/") || soundpack_id.starts_with("mouse\\") {
-                crate::state::soundpack::SoundpackType::Mouse
-            } else {
-                // Fallback to JSON content or default to keyboard
-                match config.get("soundpack_type").and_then(|v| v.as_str()) {
-                    Some("mouse") => crate::state::soundpack::SoundpackType::Mouse,
-                    _ => crate::state::soundpack::SoundpackType::Keyboard,
-                }
-            }
+        soundpack_type: if is_mouse {
+            SoundpackType::Mouse
+        } else {
+            SoundpackType::Keyboard
         },
         folder_path: soundpack_id.to_string(), // Store the relative path (e.g., "keyboard/Super Paper Mario Talk")
         last_modified: metadata

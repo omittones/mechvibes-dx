@@ -56,6 +56,7 @@ pub struct KeyDefinition {
     pub audio_file: Option<String>, // For "multi" definition method
 }
 
+// This is the structure of the soundpack config file
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SoundPack {
     pub id: String,
@@ -87,10 +88,6 @@ pub struct SoundPack {
     pub config_version_num: u32, // Internal config version number
     pub definitions: HashMap<String, KeyDefinition>,
 }
-
-impl SoundPack {}
-
-impl SoundpackType {}
 
 // ===== SOUNDPACK METADATA =====
 

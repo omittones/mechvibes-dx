@@ -156,7 +156,9 @@ pub fn app() -> Element {
                 }
             }
         });
-    } // Process hotkey Ctrl+Alt+M to toggle global sound
+    }
+
+    // Process hotkey Ctrl+Alt+M to toggle global sound
     {
         let hotkey_rx = hotkey_rx.clone();
 
@@ -191,7 +193,9 @@ pub fn app() -> Element {
                 }
             }
         });
-    } // Initialize update service for background update checking
+    }
+
+    // Initialize update service for background update checking
     #[cfg(feature = "auto-update")]
     {
         use crate::utils::auto_updater::UpdateService;

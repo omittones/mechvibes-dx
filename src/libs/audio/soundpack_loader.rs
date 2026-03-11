@@ -740,8 +740,8 @@ fn create_soundpack_metadata(
                 Some(String::new()) // Empty string if no icon specified
             }
         },
-        soundpack_type: soundpack.soundpack_type.clone(), // Include the mouse field
-        folder_path: id,                                  // Use the derived folder path for loading
+        soundpack_type: soundpack.soundpack_type, // Include the mouse field
+        folder_path: id,                          // Use the derived folder path for loading
         last_modified,
         last_accessed: std::time::SystemTime::now()
             .duration_since(std::time::SystemTime::UNIX_EPOCH)
