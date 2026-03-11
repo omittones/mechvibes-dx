@@ -2,17 +2,19 @@ use crate::state::themes::ThemesConfig;
 use dioxus::prelude::*;
 use once_cell::sync::Lazy;
 use std::rc::Rc;
-use std::sync::{ Arc, Mutex };
+use std::sync::{Arc, Mutex};
 
-static THEMES_CONFIG: Lazy<Arc<Mutex<ThemesConfig>>> = Lazy::new(||
-    Arc::new(Mutex::new(ThemesConfig::load()))
-);
+static THEMES_CONFIG: Lazy<Arc<Mutex<ThemesConfig>>> =
+    Lazy::new(|| Arc::new(Mutex::new(ThemesConfig::load())));
 
 /// Global signal to trigger refresh of all theme components
 static REFRESH_TRIGGER: GlobalSignal<u32> = Signal::global(|| 0);
 
 /// Hook for accessing and updating themes configuration
-pub fn use_themes() -> (Signal<ThemesConfig>, Rc<dyn Fn(Box<dyn FnOnce(&mut ThemesConfig)>)>) {
+pub fn use_themes() -> (
+    Signal<ThemesConfig>,
+    Rc<dyn Fn(Box<dyn FnOnce(&mut ThemesConfig)>)>,
+) {
     // Load initial themes config
     let mut themes = use_signal(|| THEMES_CONFIG.lock().unwrap().clone());
 

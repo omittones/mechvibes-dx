@@ -3,13 +3,18 @@ use crate::state::soundpack::SoundpackMetadata;
 use crate::utils::config_converter;
 use crate::utils::soundpack_validator::{SoundpackValidationStatus, validate_soundpack_config};
 use std::fs;
+use std::path::PathBuf;
 
 /// Load soundpack metadata from config.json
 pub fn load_soundpack_metadata(
-    _soundpack_path: &str,
+    soundpack_path: &str,
     soundpack_id: &str,
+    is_mouse: bool,
 ) -> Result<SoundpackMetadata, String> {
-    let config_path = paths::soundpacks::config_json(soundpack_id);
+    let config_path = PathBuf::from(soundpack_path)
+        .join("config.json")
+        .to_string_lossy()
+        .to_string();
     let mut last_error: Option<String> = None; // Validate the soundpack configuration first
     let validation_result = validate_soundpack_config(&config_path);
 
@@ -50,7 +55,7 @@ pub fn load_soundpack_metadata(
             log::debug!(
                 "🔄 [CACHE DEBUG] Found V2 multi method config, converting to single method"
             );
-            let soundpack_dir = paths::soundpacks::soundpack_dir(soundpack_id);
+            let soundpack_dir = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
 
             if let Err(e) =
                 config_converter::convert_v2_multi_to_single(&config_path, &soundpack_dir)
@@ -77,7 +82,7 @@ pub fn load_soundpack_metadata(
 
     // If audio_file exists, check if the actual file exists
     if let Some(audio_filename) = audio_file {
-        let soundpack_dir = paths::soundpacks::soundpack_dir(soundpack_id);
+        let soundpack_dir = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
         let full_audio_path = format!(
             "{}/{}",
             soundpack_dir,
@@ -91,7 +96,8 @@ pub fn load_soundpack_metadata(
         );
 
         if !std::path::Path::new(&full_audio_path).exists() {
-            log::info!("⚠️ [CACHE DEBUG] Audio file not found during cache refresh: {}",
+            log::info!(
+                "⚠️ [CACHE DEBUG] Audio file not found during cache refresh: {}",
                 full_audio_path
             );
         }
@@ -146,10 +152,11 @@ pub fn load_soundpack_metadata(
             if let Some(icon_filename) = config.get("icon").and_then(|v| v.as_str()) {
                 let icon_path = format!(
                     "{}/{}",
-                    paths::soundpacks::soundpack_dir(soundpack_id),
+                    paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse),
                     icon_filename
                 );
-                log::debug!("🔍 Checking icon for {}: {} -> exists: {}",
+                log::debug!(
+                    "🔍 Checking icon for {}: {} -> exists: {}",
                     soundpack_id,
                     icon_path,
                     std::path::Path::new(&icon_path).exists()
@@ -160,7 +167,8 @@ pub fn load_soundpack_metadata(
                     log::info!("✅ Generated asset URL for {}: {}", soundpack_id, asset_url);
                     Some(asset_url)
                 } else {
-                    log::error!("❌ Icon not found for {}, setting empty string",
+                    log::error!(
+                        "❌ Icon not found for {}, setting empty string",
                         soundpack_id
                     );
                     Some(String::new()) // Empty string if icon file not found

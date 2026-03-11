@@ -1,6 +1,6 @@
 use crate::state::app::use_state_trigger;
 use crate::state::paths;
-use crate::state::soundpack::SoundpackMetadata;
+use crate::state::soundpack::{SoundpackMetadata, SoundpackType};
 use crate::utils::path::{directory_exists, open_path};
 use dioxus::document::eval;
 use dioxus::prelude::*;
@@ -11,10 +11,10 @@ use super::ConfirmDeleteModal;
 
 /// Open a soundpack folder in the system file manager
 /// Opens the specific soundpack folder
-fn open_soundpack_folder(soundpack_id: &str) -> Result<(), String> {
+fn open_soundpack_folder(soundpack_id: &str, is_mouse: bool) -> Result<(), String> {
     use std::path::PathBuf;
 
-    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
+    let soundpack_path = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
 
     // Normalize path separators for Windows
     let normalized_path = PathBuf::from(&soundpack_path);
@@ -37,8 +37,8 @@ fn open_soundpack_folder(soundpack_id: &str) -> Result<(), String> {
 }
 
 /// Delete a soundpack directory and all its contents
-fn delete_soundpack(soundpack_id: &str) -> Result<(), String> {
-    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
+fn delete_soundpack(soundpack_id: &str, is_mouse: bool) -> Result<(), String> {
+    let soundpack_path = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
 
     // Check if the directory exists
     if !directory_exists(&soundpack_path) {
@@ -204,7 +204,10 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
                     soundpack_id.clone()
                 };
 
-                match open_soundpack_folder(&path_to_use) {
+                match open_soundpack_folder(
+                    &path_to_use,
+                    soundpack.soundpack_type == SoundpackType::Mouse,
+                ) {
                     Ok(_) => log::info!(
                         "✅ Successfully opened folder for soundpack: {}",
                         soundpack_name
@@ -227,7 +230,10 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
             let soundpack_id = soundpack_id.clone();
             let trigger = trigger.clone();
             spawn(async move {
-                match delete_soundpack(&soundpack_id) {
+                match delete_soundpack(
+                    &soundpack_id,
+                    soundpack.soundpack_type == SoundpackType::Mouse,
+                ) {
                     Ok(_) => {
                         log::info!("✅ Successfully deleted soundpack: {}", soundpack_id);
                         // The modal will close automatically due to form method="dialog"

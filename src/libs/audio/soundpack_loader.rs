@@ -1,27 +1,21 @@
+use std::path::PathBuf;
+
 use crate::state::config::AppConfig;
 use crate::state::paths;
-use crate::state::soundpack::SoundPack;
+use crate::state::soundpack::{SoundPack, SoundpackType};
 use crate::state::soundpack::{SoundpackCache, SoundpackMetadata};
 
 use super::audio_context::AudioContext;
 
-/// Determine soundpack type based on the soundpack path
-fn determine_soundpack_type(soundpack_id: &str) -> crate::state::soundpack::SoundpackType {
-    if soundpack_id.starts_with("keyboard/") || soundpack_id.starts_with("keyboard\\") {
-        crate::state::soundpack::SoundpackType::Keyboard
-    } else if soundpack_id.starts_with("mouse/") || soundpack_id.starts_with("mouse\\") {
-        crate::state::soundpack::SoundpackType::Mouse
-    } else {
-        // Default to keyboard for backwards compatibility
-        crate::state::soundpack::SoundpackType::Keyboard
-    }
-}
-
 pub fn load_soundpack(context: &AudioContext) -> Result<(), String> {
     let config = AppConfig::load();
-    // Load both keyboard and mouse soundpacks
-    load_keyboard_soundpack(context, &config.keyboard_soundpack)?;
-    load_mouse_soundpack(context, &config.mouse_soundpack)?;
+    // Load both keyboard and mouse soundpacks if they are selected
+    if !config.keyboard_soundpack.is_empty() {
+        load_keyboard_soundpack(context, &config.keyboard_soundpack)?;
+    }
+    if !config.mouse_soundpack.is_empty() {
+        load_mouse_soundpack(context, &config.mouse_soundpack)?;
+    }
     Ok(())
 }
 
@@ -34,10 +28,8 @@ pub fn load_keyboard_soundpack_with_cache_control(
     soundpack_id: &str,
     update_cache_on_error: bool,
 ) -> Result<(), String> {
-    // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
-        log::error!("⚠️Skipping keyboard soundpack loading: empty soundpack ID");
-        return Ok(()); // Return success to avoid error handling
+        return Err("Soundpack id is empty!".into());
     }
 
     log::info!("🎹 Loading keyboard soundpack: {}", soundpack_id);
@@ -45,7 +37,7 @@ pub fn load_keyboard_soundpack_with_cache_control(
         Ok(()) => Ok(()),
         Err(e) => {
             // Capture the error in cache
-            capture_soundpack_loading_error(soundpack_id, &e);
+            capture_soundpack_loading_error(soundpack_id, SoundpackType::Keyboard, &e);
             Err(e)
         }
     }
@@ -60,10 +52,8 @@ pub fn load_mouse_soundpack_with_cache_control(
     soundpack_id: &str,
     update_cache_on_error: bool,
 ) -> Result<(), String> {
-    // Skip loading if soundpack ID is empty
     if soundpack_id.is_empty() {
-        log::error!("⚠️Skipping mouse soundpack loading: empty soundpack ID");
-        return Ok(()); // Return success to avoid error handling
+        return Err("Soundpack id is empty!".into());
     }
 
     log::info!("🖱️ Loading mouse soundpack: {}", soundpack_id);
@@ -72,7 +62,7 @@ pub fn load_mouse_soundpack_with_cache_control(
         Err(e) => {
             // Capture the error in cache only if requested
             if update_cache_on_error {
-                capture_soundpack_loading_error(soundpack_id, &e);
+                capture_soundpack_loading_error(soundpack_id, SoundpackType::Mouse, &e);
             }
             Err(e)
         }
@@ -409,12 +399,11 @@ pub fn load_keyboard_soundpack_optimized(
     log::info!("📂 Direct loading keyboard soundpack: {}", soundpack_id);
 
     // Load soundpack directly from filesystem
-    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
+    let soundpack_dir = paths::soundpacks::find_soundpack_dir(soundpack_id, false);
+    let config_path = PathBuf::from(&soundpack_dir).join("config.json");
 
-    // Load config.json
-    let config_path = paths::soundpacks::config_json(soundpack_id);
     let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config at {}: {}", config_path, e))?; // Only load V2 config format - V1 configs must be converted first
+        .map_err(|e| format!("Failed to read config at {}: {}", config_path.display(), e))?; // Only load V2 config format - V1 configs must be converted first
     let mut soundpack: SoundPack = serde_json::from_str(&config_content).map_err(|e| {
         // Check if this might be a V1 config
         if config_content.contains("\"key_define_type\"") || config_content.contains("\"defines\"") {
@@ -424,16 +413,10 @@ pub fn load_keyboard_soundpack_optimized(
         }
     })?;
 
-    // Override soundpack_type based on folder path (more reliable than JSON content)
-    soundpack.soundpack_type = determine_soundpack_type(soundpack_id);
-
-    // Verify this is a keyboard soundpack
-    if soundpack.soundpack_type != crate::state::soundpack::SoundpackType::Keyboard {
-        return Err("This is a mouse soundpack, not a keyboard soundpack".to_string());
-    }
+    soundpack.soundpack_type = SoundpackType::Keyboard;
 
     // Load audio samples directly from file
-    let samples = load_audio_file(&soundpack_path, &soundpack)?;
+    let samples = load_audio_file(&soundpack_dir, &soundpack)?;
 
     // Create key mappings (only for keyboard soundpacks)
     let key_mappings = create_key_mappings(&soundpack, &samples.0); // Update audio context with keyboard data
@@ -441,7 +424,7 @@ pub fn load_keyboard_soundpack_optimized(
 
     // Update metadata cache - create metadata with no error since loading succeeded
     let mut cache = SoundpackCache::load();
-    match create_soundpack_metadata(&soundpack_path, &soundpack) {
+    match create_soundpack_metadata(&soundpack_dir, &soundpack) {
         Ok(metadata) => {
             cache.add_soundpack(metadata);
         }
@@ -462,7 +445,7 @@ pub fn load_keyboard_soundpack_optimized(
                         .unwrap_or_else(|| "1.0".to_string()),
                     tags: soundpack.tags.clone().unwrap_or_default(),
                     icon: soundpack.icon.clone(),
-                    soundpack_type: determine_soundpack_type(soundpack_id),
+                    soundpack_type: soundpack.soundpack_type,
                     folder_path: soundpack_id.to_string(), // Add folder_path for correct path resolution
                     last_modified: 0,
                     last_accessed: std::time::SystemTime::now()
@@ -500,25 +483,19 @@ pub fn load_mouse_soundpack_optimized(
     log::info!("📂 Direct loading mouse soundpack: {}", soundpack_id);
 
     // Load soundpack directly from filesystem
-    let soundpack_path = paths::soundpacks::soundpack_dir(soundpack_id);
+    let soundpack_dir = paths::soundpacks::find_soundpack_dir(soundpack_id, true);
+    let config_path = PathBuf::from(&soundpack_dir).join("config.json");
 
     // Load config.json
-    let config_path = paths::soundpacks::config_json(soundpack_id);
     let config_content = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config: {}", e))?;
     let mut soundpack: SoundPack = serde_json::from_str(&config_content)
         .map_err(|e| format!("Failed to parse config: {}", e))?;
 
-    // Override soundpack_type based on folder path (more reliable than JSON content)
-    soundpack.soundpack_type = determine_soundpack_type(soundpack_id);
-
-    // Verify this is a mouse soundpack
-    if soundpack.soundpack_type != crate::state::soundpack::SoundpackType::Mouse {
-        return Err("This is a keyboard soundpack, not a mouse soundpack".to_string());
-    }
+    soundpack.soundpack_type = SoundpackType::Mouse;
 
     // Load audio samples directly from file
-    let samples = load_audio_file(&soundpack_path, &soundpack)?;
+    let samples = load_audio_file(&soundpack_dir, &soundpack)?;
 
     // Create mouse mappings (only for mouse soundpacks)
     let mouse_mappings = create_mouse_mappings(&soundpack, &samples.0); // Update audio context with mouse data
@@ -526,7 +503,7 @@ pub fn load_mouse_soundpack_optimized(
 
     // Update metadata cache - create metadata with no error since loading succeeded
     let mut cache = SoundpackCache::load();
-    match create_soundpack_metadata(&soundpack_path, &soundpack) {
+    match create_soundpack_metadata(&soundpack_dir, &soundpack) {
         Ok(metadata) => {
             cache.add_soundpack(metadata);
         }
@@ -547,7 +524,7 @@ pub fn load_mouse_soundpack_optimized(
                         .unwrap_or_else(|| "1.0".to_string()),
                     tags: soundpack.tags.clone().unwrap_or_default(),
                     icon: soundpack.icon.clone(),
-                    soundpack_type: determine_soundpack_type(soundpack_id),
+                    soundpack_type: soundpack.soundpack_type,
                     folder_path: soundpack_id.to_string(), // Add folder_path for correct path resolution
                     last_modified: 0,
                     last_accessed: std::time::SystemTime::now()
@@ -851,7 +828,7 @@ fn create_mouse_mappings(
 }
 
 /// Capture soundpack loading error and update the cache
-fn capture_soundpack_loading_error(soundpack_id: &str, error: &str) {
+fn capture_soundpack_loading_error(soundpack_id: &str, soundpack_type: SoundpackType, error: &str) {
     // Skip creating cache entries for empty soundpack IDs
     if soundpack_id.is_empty() {
         log::error!("⚠️Skipping cache entry for empty soundpack ID: {}", error);
@@ -877,7 +854,7 @@ fn capture_soundpack_loading_error(soundpack_id: &str, error: &str) {
             version: "unknown".to_string(),
             tags: vec!["error".to_string()],
             icon: None,
-            soundpack_type: determine_soundpack_type(soundpack_id),
+            soundpack_type: soundpack_type,
             folder_path: soundpack_id.to_string(), // Add folder_path for error entries
             last_modified: 0,
             last_accessed: std::time::SystemTime::now()

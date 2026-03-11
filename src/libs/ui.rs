@@ -204,7 +204,9 @@ pub fn app() -> Element {
             // Start background update checking
             update_service.start().await;
         });
-    } // Set up asset handler for serving soundpack images
+    }
+
+    // Set up asset handler for serving soundpack images
     use_asset_handler("soundpack-images", |request, response| {
         let request_path = request.uri().path();
 
@@ -213,12 +215,12 @@ pub fn app() -> Element {
 
         if path_parts.len() >= 4 && path_parts[0] == "soundpack-images" {
             let device_type = path_parts[1];
-            let soundpack_name = path_parts[2];
+            let soundpack_id = path_parts[2];
             let filename = path_parts[3];
 
             // Security: Validate path segments to prevent directory traversal
             // Reject empty segments, path separators, and parent directory references
-            if device_type.is_empty() || soundpack_name.is_empty() || filename.is_empty() {
+            if device_type.is_empty() || soundpack_id.is_empty() || filename.is_empty() {
                 let error_response = Response::builder().status(400).body(Vec::new()).unwrap();
                 response.respond(error_response);
                 return;
@@ -227,9 +229,9 @@ pub fn app() -> Element {
             if device_type.contains("..")
                 || device_type.contains('/')
                 || device_type.contains('\\')
-                || soundpack_name.contains("..")
-                || soundpack_name.contains('/')
-                || soundpack_name.contains('\\')
+                || soundpack_id.contains("..")
+                || soundpack_id.contains('/')
+                || soundpack_id.contains('\\')
                 || filename.contains("..")
                 || filename.contains('/')
                 || filename.contains('\\')
@@ -239,11 +241,9 @@ pub fn app() -> Element {
                 return;
             }
 
-            // Join device_type/soundpack_name to form the full soundpack_id
-            let soundpack_id = format!("{}/{}", device_type, soundpack_name);
-
             // Get the soundpack directory path - supports both built-in and custom locations
-            let soundpack_dir = paths::soundpacks::soundpack_dir(&soundpack_id);
+            let soundpack_dir =
+                paths::soundpacks::find_soundpack_dir(&soundpack_id, device_type == "mouse");
             let image_path = std::path::PathBuf::from(&soundpack_dir).join(filename);
 
             if image_path.exists() {

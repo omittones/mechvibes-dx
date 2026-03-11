@@ -15,7 +15,11 @@ pub fn config_file_exists() -> bool {
 
 /// Get absolute path for data directory
 pub fn get_data_dir_absolute() -> String {
-    paths::data::config_json().parent().unwrap().to_string_lossy().to_string()
+    paths::data::config_json()
+        .parent()
+        .unwrap()
+        .to_string_lossy()
+        .to_string()
 }
 
 /// Get absolute path for config file
@@ -26,13 +30,6 @@ pub fn get_config_file_absolute() -> String {
 /// Get absolute path for soundpacks directory (built-in soundpacks)
 pub fn get_soundpacks_dir_absolute() -> String {
     paths::soundpacks::get_builtin_soundpacks_dir()
-        .to_string_lossy()
-        .to_string()
-}
-
-/// Get absolute path for custom soundpacks directory (system app data)
-pub fn get_custom_soundpacks_dir_absolute() -> String {
-    paths::soundpacks::get_custom_soundpacks_dir()
         .to_string_lossy()
         .to_string()
 }
@@ -64,13 +61,8 @@ pub fn directory_exists(path: &str) -> bool {
 /// Create directory recursively if it doesn't exist
 pub fn ensure_directory_exists(path: impl AsRef<std::path::Path>) -> Result<(), String> {
     let path_ref = path.as_ref();
-    fs::create_dir_all(path_ref).map_err(|e| {
-        format!(
-            "Failed to create directory '{}': {}",
-            path_ref.display(),
-            e
-        )
-    })
+    fs::create_dir_all(path_ref)
+        .map_err(|e| format!("Failed to create directory '{}': {}", path_ref.display(), e))
 }
 
 /// Read file contents as string
@@ -141,8 +133,7 @@ pub fn copy_to_custom_images(source_path: &str) -> Result<String, String> {
 
     // Copy file to custom images directory
     let dest_path = custom_images_dir.join(&new_filename);
-    fs::copy(source, &dest_path)
-        .map_err(|e| format!("Failed to copy file: {}", e))?;
+    fs::copy(source, &dest_path).map_err(|e| format!("Failed to copy file: {}", e))?;
 
     // Return asset URL
     Ok(format!("/custom-images/{}", new_filename))

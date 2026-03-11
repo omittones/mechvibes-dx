@@ -109,7 +109,7 @@ pub mod data {
 /// Soundpack directory paths
 pub mod soundpacks {
     use super::{get_app_root, get_system_app_data_dir};
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     /// Get the base soundpacks directory for built-in soundpacks (app root)
     pub fn get_builtin_soundpacks_dir() -> PathBuf {
@@ -123,36 +123,28 @@ pub mod soundpacks {
 
     /// Get soundpack directory path for a specific soundpack ID
     /// Checks built-in location first, then custom location
-    /// soundpack_id format: "keyboard/Soundpack Name" or "mouse/Soundpack Name"
-    pub fn soundpack_dir(soundpack_id: &str) -> String {
-        // Normalize the soundpack_id by splitting on both / and \ and rejoining with PathBuf
-        let parts: Vec<&str> = soundpack_id.split(&['/', '\\'][..]).collect();
+    pub fn find_soundpack_dir(soundpack_id: &str, is_mouse: bool) -> String {
+        let parts = vec![if is_mouse { "mouse" } else { "keyboard" }, soundpack_id];
 
         // Check custom location first
-        let mut custom_path = get_custom_soundpacks_dir();
+        let mut soundpack_dir = get_custom_soundpacks_dir();
         for part in &parts {
-            custom_path = custom_path.join(part);
+            soundpack_dir = soundpack_dir.join(part);
         }
+        let config_path = soundpack_dir.join("config.json");
 
-        if custom_path.exists() {
-            custom_path.to_string_lossy().to_string()
+        let final_soundpack_dir = if config_path.exists() {
+            soundpack_dir
         } else {
             // Fallback to built-in location
-            let mut path = get_builtin_soundpacks_dir();
+            soundpack_dir = get_builtin_soundpacks_dir();
             for part in parts {
-                path = path.join(part);
+                soundpack_dir = soundpack_dir.join(part);
             }
-            path.to_string_lossy().to_string()
-        }
-    }
+            soundpack_dir
+        };
 
-    /// Get config.json path for a specific soundpack
-    /// soundpack_id format: "keyboard/Soundpack Name" or "mouse/Soundpack Name"
-    pub fn config_json(soundpack_id: &str) -> String {
-        Path::new(&soundpack_dir(soundpack_id))
-            .join("config.json")
-            .to_string_lossy()
-            .to_string()
+        final_soundpack_dir.to_string_lossy().to_string()
     }
 
     /// Ensure soundpack directories exist (keyboard and mouse)
