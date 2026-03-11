@@ -1,13 +1,11 @@
-use crate::utils::constants::APP_NAME;
-use std::path::PathBuf;
-
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
 #[cfg(target_os = "windows")]
 use winreg::enums::*;
 
 /// Get the current executable path
-fn get_exe_path() -> Result<PathBuf, String> {
+#[cfg(target_os = "windows")]
+fn get_exe_path() -> Result<std::path::PathBuf, String> {
     std::env::current_exe().map_err(|e| format!("Failed to get executable path: {}", e))
 }
 
@@ -90,20 +88,18 @@ pub fn is_auto_startup_enabled() -> bool {
 }
 
 /// Set auto startup state (enable or disable)
+#[cfg(target_os = "windows")]
 pub fn set_auto_startup(enable: bool) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        if enable {
-            enable_auto_startup()
-        } else {
-            disable_auto_startup()
-        }
+    if enable {
+        enable_auto_startup()
+    } else {
+        disable_auto_startup()
     }
+}
 
-    #[cfg(not(target_os = "windows"))]
-    {
-        Err("Auto startup is only supported on Windows".to_string())
-    }
+#[cfg(not(target_os = "windows"))]
+pub fn set_auto_startup(_enable: bool) -> Result<(), String> {
+    Err("Auto startup is only supported on Windows".to_string())
 }
 
 /// Get current auto startup state

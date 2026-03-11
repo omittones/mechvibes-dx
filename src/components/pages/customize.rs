@@ -1,10 +1,10 @@
 use crate::components::theme_toggler::ThemeToggler;
-use crate::components::ui::{ Collapse, ColorPicker, PageHeader, Toggler };
+use crate::components::ui::{Collapse, ColorPicker, PageHeader, Toggler};
 use crate::utils::config::use_config;
 use crate::utils::delay;
 use crate::utils::path;
 use dioxus::prelude::*;
-use lucide_dioxus::{ Check, Palette, RotateCcw, Upload };
+use lucide_dioxus::{Check, Palette, RotateCcw, Upload};
 
 /// Reusable image picker component with file dialog and URL input
 #[component]
@@ -163,7 +163,8 @@ fn LogoCollapseSection() -> Element {
 #[component]
 fn BackgroundCollapseSection() -> Element {
     let (config, _) = use_config();
-    let enable_background_customization = use_memo(move || config().enable_background_customization);
+    let enable_background_customization =
+        use_memo(move || config().enable_background_customization);
 
     rsx! {
         Collapse {
@@ -225,12 +226,10 @@ fn LogoCustomizationPanel() -> Element {
     let mut background_image = use_signal(|| logo_customization().background_image.clone());
     let mut use_background_image = use_signal(|| logo_customization().use_background_image);
     let mut muted_background = use_signal(|| logo_customization().muted_background);
-    let mut muted_background_image = use_signal(||
-        logo_customization().muted_background_image.clone()
-    );
-    let mut use_muted_background_image = use_signal(
-        || logo_customization().use_muted_background_image
-    );
+    let mut muted_background_image =
+        use_signal(|| logo_customization().muted_background_image.clone());
+    let mut use_muted_background_image =
+        use_signal(|| logo_customization().use_muted_background_image);
     let mut dimmed_when_muted = use_signal(|| logo_customization().dimmed_when_muted);
     let mut saving = use_signal(|| false);
     // Theme-based color options using CSS variables
@@ -248,7 +247,7 @@ fn LogoCustomizationPanel() -> Element {
         ("Warning", "var(--color-warning)"),
         ("Warning Content", "var(--color-warning-content)"),
         ("Error", "var(--color-error)"),
-        ("Error Content", "var(--color-error-content)")
+        ("Error Content", "var(--color-error-content)"),
     ];
     let on_save = {
         let update_config_clone = update_config.clone();
@@ -264,20 +263,18 @@ fn LogoCustomizationPanel() -> Element {
             let use_muted_bg_image = use_muted_background_image();
             let dimmed = dimmed_when_muted();
 
-            update_config_clone(
-                Box::new(move |cfg| {
-                    cfg.logo_customization.border_color = border;
-                    cfg.logo_customization.text_color = text;
-                    cfg.logo_customization.shadow_color = shadow;
-                    cfg.logo_customization.background_color = background;
-                    cfg.logo_customization.background_image = bg_image;
-                    cfg.logo_customization.use_background_image = use_bg_image;
-                    cfg.logo_customization.muted_background = muted_bg;
-                    cfg.logo_customization.muted_background_image = muted_bg_image;
-                    cfg.logo_customization.use_muted_background_image = use_muted_bg_image;
-                    cfg.logo_customization.dimmed_when_muted = dimmed;
-                })
-            );
+            update_config_clone(Box::new(move |cfg| {
+                cfg.logo_customization.border_color = border;
+                cfg.logo_customization.text_color = text;
+                cfg.logo_customization.shadow_color = shadow;
+                cfg.logo_customization.background_color = background;
+                cfg.logo_customization.background_image = bg_image;
+                cfg.logo_customization.use_background_image = use_bg_image;
+                cfg.logo_customization.muted_background = muted_bg;
+                cfg.logo_customization.muted_background_image = muted_bg_image;
+                cfg.logo_customization.use_muted_background_image = use_muted_bg_image;
+                cfg.logo_customization.dimmed_when_muted = dimmed;
+            }));
             saving.set(true);
             spawn(async move {
                 delay::Delay::ms(500).await;
@@ -298,11 +295,9 @@ fn LogoCustomizationPanel() -> Element {
         use_muted_background_image.set(default_logo.use_muted_background_image);
         dimmed_when_muted.set(default_logo.dimmed_when_muted);
 
-        update_config(
-            Box::new(move |cfg| {
-                cfg.logo_customization = default_logo;
-            })
-        );
+        update_config(Box::new(move |cfg| {
+            cfg.logo_customization = default_logo;
+        }));
     }; // Update local state when config changes
     use_effect(move || {
         let logo = logo_customization();
@@ -516,9 +511,8 @@ fn LogoCustomizationPanel() -> Element {
 #[component]
 fn BackgroundCustomizationSection() -> Element {
     let (config, update_config) = use_config();
-    let enable_background_customization = use_memo(
-        move || config().enable_background_customization
-    );
+    let enable_background_customization =
+        use_memo(move || config().enable_background_customization);
 
     // Create a local signal that syncs with config
     let mut local_enable = use_signal(|| enable_background_customization());
@@ -576,7 +570,7 @@ fn BackgroundCustomizationPanel() -> Element {
         ("Warning", "var(--color-warning)"),
         ("Warning Content", "var(--color-warning-content)"),
         ("Error", "var(--color-error)"),
-        ("Error Content", "var(--color-error-content)")
+        ("Error Content", "var(--color-error-content)"),
     ];
 
     let on_save = {
@@ -586,13 +580,11 @@ fn BackgroundCustomizationPanel() -> Element {
             let image = background_image();
             let use_img = use_image();
 
-            update_config_clone(
-                Box::new(move |cfg| {
-                    cfg.background_customization.background_color = color;
-                    cfg.background_customization.background_image = image;
-                    cfg.background_customization.use_image = use_img;
-                })
-            );
+            update_config_clone(Box::new(move |cfg| {
+                cfg.background_customization.background_color = color;
+                cfg.background_customization.background_image = image;
+                cfg.background_customization.use_image = use_img;
+            }));
             saving.set(true);
             spawn(async move {
                 delay::Delay::ms(500).await;
@@ -607,11 +599,9 @@ fn BackgroundCustomizationPanel() -> Element {
         background_image.set(default_bg.background_image.clone());
         use_image.set(default_bg.use_image);
 
-        update_config(
-            Box::new(move |cfg| {
-                cfg.background_customization = default_bg;
-            })
-        );
+        update_config(Box::new(move |cfg| {
+            cfg.background_customization = default_bg;
+        }));
     };
 
     // Update local state when config changes

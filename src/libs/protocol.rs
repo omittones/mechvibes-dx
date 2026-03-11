@@ -8,8 +8,10 @@ use std::process::Command;
 pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
     let exe_path = env::current_exe()?;
     let exe_path_str = exe_path.to_string_lossy();
-    log::info!("🔗 Registering {}// protocol... {}",
-        APP_PROTOCOL, exe_path_str
+    log::info!(
+        "🔗 Registering {}// protocol... {}",
+        APP_PROTOCOL,
+        exe_path_str
     ); // Store formatted strings to avoid temporary value issues
     let icon_path = format!("\"{}\"", exe_path_str);
     let command_path = format!("\"{}\" \"%1\"", exe_path_str); // Registry commands to register the protocol
@@ -74,7 +76,8 @@ pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
 pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
     log::info!("🍎 Protocol registration on macOS requires app bundle configuration in Info.plist");
     log::info!("Add the following to your Info.plist:");
-    log::info!(r#"
+    log::info!(
+        r#"
 <key>CFBundleURLTypes</key>    <array>
         <dict>
             <key>CFBundleURLName</key>
@@ -86,13 +89,15 @@ pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
         </dict>
     </array>
 "#,
-        APP_NAME, APP_PROTOCOL
+        APP_NAME,
+        APP_PROTOCOL
     );
     Ok(())
 }
 
 #[cfg(target_os = "linux")]
 pub fn register_protocol() -> Result<(), Box<dyn std::error::Error>> {
+    use crate::utils::constants::APP_NAME_LOWERCASE;
     use std::fs;
 
     let home = env::var("HOME")?;
@@ -246,7 +251,8 @@ fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn s
             return Err(e.into());
         }
 
-        log::info!("✅ Created and activated placeholder soundpack: {}",
+        log::info!(
+            "✅ Created and activated placeholder soundpack: {}",
             soundpack_name
         );
     }

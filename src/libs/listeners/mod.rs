@@ -1,4 +1,3 @@
-#[cfg(not(target_os = "linux"))]
 use std::sync::mpsc;
 
 mod focused_input_listener;
@@ -18,7 +17,7 @@ pub fn start_listeners(
     mouse_tx: mpsc::Sender<String>,
     hotkey_tx: mpsc::Sender<String>,
 ) {
-    use libs::evdev_input_listener::start_evdev_keyboard_listener;
+    use evdev_input_listener::start_evdev_keyboard_listener;
     use std::sync::{Arc, Mutex};
 
     log::debug!("🎮 Starting listeners (Linux mode)...");

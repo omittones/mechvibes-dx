@@ -1,9 +1,7 @@
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-
-#[cfg(target_os = "linux")]
-use std::sync::mpsc::Sender;
 
 #[cfg(target_os = "linux")]
 pub fn start_evdev_keyboard_listener(
@@ -12,7 +10,7 @@ pub fn start_evdev_keyboard_listener(
     _is_focused: Arc<Mutex<bool>>,
 ) {
     thread::spawn(move || {
-        use evdev::{Device, EventType, Key};
+        use evdev::{EventType, KeyCode};
 
         log::debug!("🔍 [evdev] Starting Linux keyboard listener (Wayland/X11 compatible)");
 
@@ -23,42 +21,40 @@ pub fn start_evdev_keyboard_listener(
         // Find all keyboard devices
         let mut keyboards = Vec::new();
 
-        match evdev::enumerate().map(|t| t.collect::<Vec<_>>()) {
-            Ok(devices) => {
-                for (path, mut device) in devices {
-                    // Check if device has keyboard capabilities
-                    if device.supported_keys().is_some() {
-                        log::info!(
-                            "🔍 [evdev] Found keyboard device: {:?} - {}",
-                            path.display(),
-                            device.name().unwrap_or("Unknown")
-                        );
+        let devices: Vec<_> = evdev::enumerate().collect();
+        if devices.is_empty() {
+            log::error!(
+                "❌ [evdev] No devices found, make sure you have permission to access /dev/input/event*"
+            );
+            return;
+        }
 
-                        // Set device to non-blocking mode to prevent blocking on idle devices
-                        if let Err(e) = device.set_nonblocking(true) {
-                            log::error!(
-                                "⚠️ [evdev] Failed to set non-blocking mode for {:?}: {}",
-                                path.display(),
-                                e
-                            );
-                        }
-
-                        keyboards.push(device);
-                    }
-                }
-            }
-            Err(e) => {
-                log::error!("❌ [evdev] Failed to enumerate devices: {}", e);
-                log::error!(
-                    "💡 [evdev] Make sure you're in the 'input' group: sudo usermod -a -G input $USER"
+        for (path, device) in devices {
+            // Check if device has keyboard capabilities
+            if device.supported_keys().is_some() {
+                log::info!(
+                    "🔍 [evdev] Found keyboard device: {:?} - {}",
+                    path.display(),
+                    device.name().unwrap_or("Unknown")
                 );
-                return;
+
+                // Set device to non-blocking mode to prevent blocking on idle devices
+                if let Err(e) = device.set_nonblocking(true) {
+                    log::error!(
+                        "⚠️ [evdev] Failed to set non-blocking mode for {:?}: {}",
+                        path.display(),
+                        e
+                    );
+                }
+
+                keyboards.push(device);
             }
         }
 
         if keyboards.is_empty() {
-            log::error!("❌ [evdev] No keyboard devices found!");
-            log::error!("💡 [evdev] Make sure you have permission to access /dev/input/event*");
+            log::error!(
+                "❌ [evdev] No keyboard devices found, make sure you have permission to access /dev/input/event*!"
+            );
             return;
         }
 
@@ -76,67 +72,83 @@ pub fn start_evdev_keyboard_listener(
                         for event in events {
                             if event.event_type() == EventType::KEY {
                                 let key_value = event.value();
-
-                                if let Ok(key) = Key::new(event.code()) {
-                                    let key_code = map_evdev_keycode(key);
-                                    if !key_code.is_empty() {
-                                        // Handle key press (value == 1)
-                                        if key_value == 1 {
-                                            // Track modifier keys for hotkey detection
-                                            match key_code {
-                                                "ControlLeft" | "ControlRight" => {
-                                                    ctrl_pressed = true;
-                                                }
-                                                "AltLeft" | "AltRight" => {
-                                                    alt_pressed = true;
-                                                }
-                                                "KeyM" => {
-                                                    // Check for Ctrl+Alt+M hotkey combination
-                                                    if ctrl_pressed && alt_pressed {
-                                                        log::info!(
-                                                            "🔥 [evdev] Hotkey detected: Ctrl+Alt+M - Toggling global sound"
-                                                        );
-                                                        match hotkey_tx.send("TOGGLE_SOUND".to_string()) {
-                                                            Ok(()) => log::debug!("[evdev] Hotkey event sent successfully"),
-                                                            Err(e) => log::error!("[evdev] Failed to send hotkey event: {}", e),
-                                                        }
-                                                        continue; // Don't process this as a regular key event
+                                let key = KeyCode::new(event.code());
+                                let key_code = map_evdev_keycode(key);
+                                if !key_code.is_empty() {
+                                    // Handle key press (value == 1)
+                                    if key_value == 1 {
+                                        // Track modifier keys for hotkey detection
+                                        match key_code {
+                                            "ControlLeft" | "ControlRight" => {
+                                                ctrl_pressed = true;
+                                            }
+                                            "AltLeft" | "AltRight" => {
+                                                alt_pressed = true;
+                                            }
+                                            "KeyM" => {
+                                                // Check for Ctrl+Alt+M hotkey combination
+                                                if ctrl_pressed && alt_pressed {
+                                                    log::info!(
+                                                        "🔥 [evdev] Hotkey detected: Ctrl+Alt+M - Toggling global sound"
+                                                    );
+                                                    match hotkey_tx.send("TOGGLE_SOUND".to_string())
+                                                    {
+                                                        Ok(()) => log::debug!(
+                                                            "[evdev] Hotkey event sent successfully"
+                                                        ),
+                                                        Err(e) => log::error!(
+                                                            "[evdev] Failed to send hotkey event: {}",
+                                                            e
+                                                        ),
                                                     }
+                                                    continue; // Don't process this as a regular key event
                                                 }
-                                                _ => {}
                                             }
-
-                                            // Send key press event
-                                            match keyboard_tx.send(key_code.to_string()) {
-                                                Ok(()) => log::debug!("[evdev] Key press detected: {}", key_code),
-                                                Err(e) => log::error!("[evdev] Failed to send key press '{}': {}", key_code, e),
-                                            }
+                                            _ => {}
                                         }
-                                        // Handle key release (value == 0)
-                                        else if key_value == 0 {
-                                            // Track modifier key releases for hotkey detection
-                                            match key_code {
-                                                "ControlLeft" | "ControlRight" => {
-                                                    ctrl_pressed = false;
-                                                }
-                                                "AltLeft" | "AltRight" => {
-                                                    alt_pressed = false;
-                                                }
-                                                _ => {}
-                                            }
 
-                                            // Send key release event
-                                            match keyboard_tx.send(format!("UP:{}", key_code)) {
-                                                Ok(()) => log::debug!("[evdev] Key release detected: {}", key_code),
-                                                Err(e) => log::error!("[evdev] Failed to send key release '{}': {}", key_code, e),
-                                            }
+                                        // Send key press event
+                                        match keyboard_tx.send(key_code.to_string()) {
+                                            Ok(()) => log::debug!(
+                                                "[evdev] Key press detected: {}",
+                                                key_code
+                                            ),
+                                            Err(e) => log::error!(
+                                                "[evdev] Failed to send key press '{}': {}",
+                                                key_code,
+                                                e
+                                            ),
                                         }
-                                        // Ignore key repeat (value == 2)
-                                    } else {
-                                        log::debug!("[evdev] Ignored unmapped key event: {:?}", key);
                                     }
+                                    // Handle key release (value == 0)
+                                    else if key_value == 0 {
+                                        // Track modifier key releases for hotkey detection
+                                        match key_code {
+                                            "ControlLeft" | "ControlRight" => {
+                                                ctrl_pressed = false;
+                                            }
+                                            "AltLeft" | "AltRight" => {
+                                                alt_pressed = false;
+                                            }
+                                            _ => {}
+                                        }
+
+                                        // Send key release event
+                                        match keyboard_tx.send(format!("UP:{}", key_code)) {
+                                            Ok(()) => log::debug!(
+                                                "[evdev] Key release detected: {}",
+                                                key_code
+                                            ),
+                                            Err(e) => log::error!(
+                                                "[evdev] Failed to send key release '{}': {}",
+                                                key_code,
+                                                e
+                                            ),
+                                        }
+                                    }
+                                    // Ignore key repeat (value == 2)
                                 } else {
-                                    log::debug!("[evdev] Ignored unknown key code: {}", event.code());
+                                    log::debug!("[evdev] Ignored unmapped key event: {:?}", key);
                                 }
                             }
                         }
@@ -157,106 +169,106 @@ pub fn start_evdev_keyboard_listener(
 }
 
 #[cfg(target_os = "linux")]
-fn map_evdev_keycode(key: evdev::Key) -> &'static str {
-    use evdev::Key::*;
+fn map_evdev_keycode(key: evdev::KeyCode) -> &'static str {
+    use evdev::KeyCode;
 
     match key {
         // Letters
-        KEY_A => "KeyA",
-        KEY_B => "KeyB",
-        KEY_C => "KeyC",
-        KEY_D => "KeyD",
-        KEY_E => "KeyE",
-        KEY_F => "KeyF",
-        KEY_G => "KeyG",
-        KEY_H => "KeyH",
-        KEY_I => "KeyI",
-        KEY_J => "KeyJ",
-        KEY_K => "KeyK",
-        KEY_L => "KeyL",
-        KEY_M => "KeyM",
-        KEY_N => "KeyN",
-        KEY_O => "KeyO",
-        KEY_P => "KeyP",
-        KEY_Q => "KeyQ",
-        KEY_R => "KeyR",
-        KEY_S => "KeyS",
-        KEY_T => "KeyT",
-        KEY_U => "KeyU",
-        KEY_V => "KeyV",
-        KEY_W => "KeyW",
-        KEY_X => "KeyX",
-        KEY_Y => "KeyY",
-        KEY_Z => "KeyZ",
+        KeyCode::KEY_A => "KeyA",
+        KeyCode::KEY_B => "KeyB",
+        KeyCode::KEY_C => "KeyC",
+        KeyCode::KEY_D => "KeyD",
+        KeyCode::KEY_E => "KeyE",
+        KeyCode::KEY_F => "KeyF",
+        KeyCode::KEY_G => "KeyG",
+        KeyCode::KEY_H => "KeyH",
+        KeyCode::KEY_I => "KeyI",
+        KeyCode::KEY_J => "KeyJ",
+        KeyCode::KEY_K => "KeyK",
+        KeyCode::KEY_L => "KeyL",
+        KeyCode::KEY_M => "KeyM",
+        KeyCode::KEY_N => "KeyN",
+        KeyCode::KEY_O => "KeyO",
+        KeyCode::KEY_P => "KeyP",
+        KeyCode::KEY_Q => "KeyQ",
+        KeyCode::KEY_R => "KeyR",
+        KeyCode::KEY_S => "KeyS",
+        KeyCode::KEY_T => "KeyT",
+        KeyCode::KEY_U => "KeyU",
+        KeyCode::KEY_V => "KeyV",
+        KeyCode::KEY_W => "KeyW",
+        KeyCode::KEY_X => "KeyX",
+        KeyCode::KEY_Y => "KeyY",
+        KeyCode::KEY_Z => "KeyZ",
 
         // Numbers
-        KEY_1 => "Digit1",
-        KEY_2 => "Digit2",
-        KEY_3 => "Digit3",
-        KEY_4 => "Digit4",
-        KEY_5 => "Digit5",
-        KEY_6 => "Digit6",
-        KEY_7 => "Digit7",
-        KEY_8 => "Digit8",
-        KEY_9 => "Digit9",
-        KEY_0 => "Digit0",
+        KeyCode::KEY_1 => "Digit1",
+        KeyCode::KEY_2 => "Digit2",
+        KeyCode::KEY_3 => "Digit3",
+        KeyCode::KEY_4 => "Digit4",
+        KeyCode::KEY_5 => "Digit5",
+        KeyCode::KEY_6 => "Digit6",
+        KeyCode::KEY_7 => "Digit7",
+        KeyCode::KEY_8 => "Digit8",
+        KeyCode::KEY_9 => "Digit9",
+        KeyCode::KEY_0 => "Digit0",
 
         // Function keys
-        KEY_F1 => "F1",
-        KEY_F2 => "F2",
-        KEY_F3 => "F3",
-        KEY_F4 => "F4",
-        KEY_F5 => "F5",
-        KEY_F6 => "F6",
-        KEY_F7 => "F7",
-        KEY_F8 => "F8",
-        KEY_F9 => "F9",
-        KEY_F10 => "F10",
-        KEY_F11 => "F11",
-        KEY_F12 => "F12",
+        KeyCode::KEY_F1 => "F1",
+        KeyCode::KEY_F2 => "F2",
+        KeyCode::KEY_F3 => "F3",
+        KeyCode::KEY_F4 => "F4",
+        KeyCode::KEY_F5 => "F5",
+        KeyCode::KEY_F6 => "F6",
+        KeyCode::KEY_F7 => "F7",
+        KeyCode::KEY_F8 => "F8",
+        KeyCode::KEY_F9 => "F9",
+        KeyCode::KEY_F10 => "F10",
+        KeyCode::KEY_F11 => "F11",
+        KeyCode::KEY_F12 => "F12",
 
         // Special keys
-        KEY_SPACE => "Space",
-        KEY_ENTER => "Enter",
-        KEY_BACKSPACE => "Backspace",
-        KEY_TAB => "Tab",
-        KEY_ESC => "Escape",
-        KEY_CAPSLOCK => "CapsLock",
-        KEY_LEFTSHIFT => "ShiftLeft",
-        KEY_RIGHTSHIFT => "ShiftRight",
-        KEY_LEFTCTRL => "ControlLeft",
-        KEY_RIGHTCTRL => "ControlRight",
-        KEY_LEFTALT => "AltLeft",
-        KEY_RIGHTALT => "AltRight",
-        KEY_LEFTMETA => "MetaLeft",
-        KEY_RIGHTMETA => "MetaRight",
+        KeyCode::KEY_SPACE => "Space",
+        KeyCode::KEY_ENTER => "Enter",
+        KeyCode::KEY_BACKSPACE => "Backspace",
+        KeyCode::KEY_TAB => "Tab",
+        KeyCode::KEY_ESC => "Escape",
+        KeyCode::KEY_CAPSLOCK => "CapsLock",
+        KeyCode::KEY_LEFTSHIFT => "ShiftLeft",
+        KeyCode::KEY_RIGHTSHIFT => "ShiftRight",
+        KeyCode::KEY_LEFTCTRL => "ControlLeft",
+        KeyCode::KEY_RIGHTCTRL => "ControlRight",
+        KeyCode::KEY_LEFTALT => "AltLeft",
+        KeyCode::KEY_RIGHTALT => "AltRight",
+        KeyCode::KEY_LEFTMETA => "MetaLeft",
+        KeyCode::KEY_RIGHTMETA => "MetaRight",
 
         // Arrow keys
-        KEY_UP => "ArrowUp",
-        KEY_DOWN => "ArrowDown",
-        KEY_LEFT => "ArrowLeft",
-        KEY_RIGHT => "ArrowRight",
+        KeyCode::KEY_UP => "ArrowUp",
+        KeyCode::KEY_DOWN => "ArrowDown",
+        KeyCode::KEY_LEFT => "ArrowLeft",
+        KeyCode::KEY_RIGHT => "ArrowRight",
 
         // Editing keys
-        KEY_INSERT => "Insert",
-        KEY_DELETE => "Delete",
-        KEY_HOME => "Home",
-        KEY_END => "End",
-        KEY_PAGEUP => "PageUp",
-        KEY_PAGEDOWN => "PageDown",
+        KeyCode::KEY_INSERT => "Insert",
+        KeyCode::KEY_DELETE => "Delete",
+        KeyCode::KEY_HOME => "Home",
+        KeyCode::KEY_END => "End",
+        KeyCode::KEY_PAGEUP => "PageUp",
+        KeyCode::KEY_PAGEDOWN => "PageDown",
 
         // Punctuation
-        KEY_MINUS => "Minus",
-        KEY_EQUAL => "Equal",
-        KEY_LEFTBRACE => "BracketLeft",
-        KEY_RIGHTBRACE => "BracketRight",
-        KEY_BACKSLASH => "Backslash",
-        KEY_SEMICOLON => "Semicolon",
-        KEY_APOSTROPHE => "Quote",
-        KEY_GRAVE => "Backquote",
-        KEY_COMMA => "Comma",
-        KEY_DOT => "Period",
-        KEY_SLASH => "Slash",
+        KeyCode::KEY_MINUS => "Minus",
+        KeyCode::KEY_EQUAL => "Equal",
+        KeyCode::KEY_LEFTBRACE => "BracketLeft",
+        KeyCode::KEY_RIGHTBRACE => "BracketRight",
+        KeyCode::KEY_BACKSLASH => "Backslash",
+        KeyCode::KEY_SEMICOLON => "Semicolon",
+        KeyCode::KEY_APOSTROPHE => "Quote",
+        KeyCode::KEY_GRAVE => "Backquote",
+        KeyCode::KEY_COMMA => "Comma",
+        KeyCode::KEY_DOT => "Period",
+        KeyCode::KEY_SLASH => "Slash",
 
         _ => "",
     }
