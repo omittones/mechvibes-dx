@@ -56,6 +56,8 @@ impl InputDeviceManager {
 
     #[cfg(windows)]
     fn enumerate_windows_devices(&mut self) -> Result<(), String> {
+        use std::ptr::null_mut;
+
         unsafe {
             let mut num_devices = 0u32;
 
@@ -110,6 +112,8 @@ impl InputDeviceManager {
 
     #[cfg(windows)]
     unsafe fn get_device_info(&self, device_handle: HANDLE) -> Result<InputDeviceInfo, String> {
+        use std::ptr::null_mut;
+
         unsafe {
             let mut name_size = 0u32;
 
@@ -264,6 +268,8 @@ impl InputDeviceManager {
 
     #[cfg(windows)]
     fn get_friendly_device_name(&self, device_path: &str) -> Result<String, String> {
+        use std::ffi::OsString;
+        use std::ptr::null_mut;
         use winapi::um::cfgmgr32::*;
 
         unsafe {

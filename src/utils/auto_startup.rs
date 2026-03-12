@@ -1,4 +1,6 @@
 #[cfg(target_os = "windows")]
+use crate::utils::constants::APP_NAME;
+#[cfg(target_os = "windows")]
 use winreg::RegKey;
 #[cfg(target_os = "windows")]
 use winreg::enums::*;
