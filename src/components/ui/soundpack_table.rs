@@ -185,7 +185,7 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
 
     // Handlers for button clicks
     let on_open_folder = {
-        let folder_path = soundpack.folder_path.clone();
+        let folder_path = soundpack.config_path.clone();
         let soundpack_id = soundpack.id.clone();
         let soundpack_name = soundpack.name.clone();
         move |_| {
@@ -225,8 +225,8 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
 
     // Handler for delete button click
     let on_confirm_delete = {
-        let path_to_use = if !soundpack.folder_path.is_empty() {
-            soundpack.folder_path.clone()
+        let path_to_use = if !soundpack.config_path.is_empty() {
+            soundpack.config_path.clone()
         } else {
             soundpack.id.clone()
         };

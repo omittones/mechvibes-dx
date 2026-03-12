@@ -100,7 +100,9 @@ pub fn use_state_trigger() -> Callback<()> {
 // Reload the current soundpacks from configuration
 pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
     let mut config = crate::state::config::AppConfig::load();
-    let mut config_changed = false; // Load keyboard soundpack
+    let mut config_changed = false;
+
+    // Load keyboard soundpack
     match crate::libs::audio::soundpack_loader::load_keyboard_soundpack_with_cache_control(
         audio_ctx,
         &config.keyboard_soundpack,
@@ -119,7 +121,9 @@ pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
             config.keyboard_soundpack = "".to_string();
             config_changed = true;
         }
-    } // Load mouse soundpack
+    }
+
+    // Load mouse soundpack
     match crate::libs::audio::soundpack_loader::load_mouse_soundpack_with_cache_control(
         audio_ctx,
         &config.mouse_soundpack,
@@ -138,7 +142,9 @@ pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
             config.mouse_soundpack = "".to_string();
             config_changed = true;
         }
-    } // Save config if any changes were made
+    }
+
+    // Save config if any changes were made
     if config_changed {
         let _ = config.save();
         log::debug!("💾 Config updated due to failed soundpack loads");

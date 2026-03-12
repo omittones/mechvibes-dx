@@ -20,7 +20,6 @@ pub fn load_soundpack_metadata(
         .join("config.json")
         .to_string_lossy()
         .to_string();
-    let mut last_error: Option<String> = None;
 
     let validation_result = validate_soundpack_config(&config_path);
 
@@ -28,12 +27,7 @@ pub fn load_soundpack_metadata(
         && validation_result.can_be_converted
     {
         let backup_path = format!("{}.v1.backup", config_path);
-        if let Err(e) = fs::copy(&config_path, &backup_path) {
-            last_error = Some(format!(
-                "Failed to create backup for {}: {}",
-                soundpack_id, e
-            ));
-        }
+        let _ = fs::copy(&config_path, &backup_path);
         match config_converter::convert_v1_to_v2(&config_path, &config_path, None) {
             Ok(()) => {}
             Err(e) => {
@@ -106,12 +100,6 @@ pub fn load_soundpack_metadata(
         .unwrap_or(soundpack_id)
         .to_string();
 
-    let version = config
-        .get("version")
-        .and_then(|v| v.as_str())
-        .unwrap_or("1.0.0")
-        .to_string();
-
     let tags = config
         .get("tags")
         .and_then(|v| v.as_array())
@@ -122,25 +110,15 @@ pub fn load_soundpack_metadata(
         })
         .unwrap_or_default();
 
-    let final_validation = validate_soundpack_config(&config_path);
-
-    let metadata =
-        fs::metadata(&config_path).map_err(|e| format!("Failed to get metadata: {}", e))?;
-
     Ok(SoundpackMetadata {
         id: soundpack_id.to_string(),
-        folder_path: soundpack_id.to_string(),
+        config_path: config_path,
         name,
         author: config
             .get("author")
             .or_else(|| config.get("m_author"))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string()),
-        description: config
-            .get("description")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string()),
-        version,
         tags,
         icon: {
             if let Some(icon_filename) = config.get("icon").and_then(|v| v.as_str()) {
@@ -186,25 +164,5 @@ pub fn load_soundpack_metadata(
         } else {
             SoundpackType::Keyboard
         },
-        last_modified: metadata
-            .modified()
-            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
-        last_accessed: 0,
-        config_version: final_validation.config_version,
-        is_valid_v2: final_validation.is_valid_v2,
-        validation_status: match final_validation.status {
-            SoundpackValidationStatus::Valid => "valid".to_string(),
-            SoundpackValidationStatus::InvalidVersion => "invalid_version".to_string(),
-            SoundpackValidationStatus::InvalidStructure(_) => "invalid_structure".to_string(),
-            SoundpackValidationStatus::MissingRequiredFields(_) => "missing_fields".to_string(),
-            SoundpackValidationStatus::VersionOneNeedsConversion => {
-                "v1_needs_conversion".to_string()
-            }
-        },
-        can_be_converted: final_validation.can_be_converted,
-        last_error: last_error,
     })
 }

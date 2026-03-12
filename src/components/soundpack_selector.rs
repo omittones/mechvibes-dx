@@ -53,7 +53,9 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
             SoundpackType::Keyboard => config.keyboard_soundpack.clone(),
             SoundpackType::Mouse => config.mouse_soundpack.clone(),
         }
-    }); // Filter soundpacks based on search query and type, then sort by last_modified
+    });
+
+    // Filter soundpacks based on search query and type, then sort by last_modified
     let filtered_soundpacks = use_memo(move || {
         let query = search_query().to_lowercase();
         let all_packs = soundpacks(); // Filter by type first
@@ -77,8 +79,10 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                             .any(|tag| tag.to_lowercase().contains(&query))
                 })
                 .collect()
-        }; // Sort by last_modified in descending order (most recent first)
-        filtered_packs.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+        };
+
+        // Sort by name alphabetically
+        filtered_packs.sort_by(|a, b| a.name.cmp(&b.name));
 
         filtered_packs
     });
@@ -86,9 +90,11 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
         move || {
             soundpacks()
                 .into_iter()
-                .find(|pack| pack.folder_path == current())
+                .find(|pack| pack.config_path == current())
         }, // Use folder_path for comparison
-    ); // Get appropriate placeholder and search text based on type
+    );
+
+    // Get appropriate placeholder and search text based on type
     let (placeholder_text, search_placeholder, not_found_text, no_soundpack_text) =
         match soundpack_type {
             SoundpackType::Keyboard => (
@@ -208,12 +214,12 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                       key: "{pack.id}",
                       class: format!(
                           "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-300 last:border-b-0 h-auto {}",
-                          if pack.folder_path == current() { "btn-disabled" } else { "btn-ghost" },
+                          if pack.config_path == current() { "btn-disabled" } else { "btn-ghost" },
                       ),
-                      disabled: pack.folder_path == current(),
+                      disabled: pack.config_path == current(),
                       // Use folder_path for comparison
                       onclick: {
-                          let pack_id = pack.folder_path.clone();
+                          let pack_id = pack.config_path.clone();
                           let mut error = error.clone();
                           let soundpacks = soundpacks.clone();
                           let mut is_open = is_open.clone();
@@ -226,7 +232,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                               is_open.set(false);
                               search_query.set(String::new());
                               error.set(String::new());
-                              if let Some(_) = soundpacks().iter().find(|p| p.folder_path == pack_id) {
+                              if let Some(_) = soundpacks().iter().find(|p| p.config_path == pack_id) {
                                   let pack_id_clone = pack_id.clone();
                                   let soundpack_type_clone = soundpack_type_click.clone();
                                   update_config(
@@ -295,7 +301,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                           } else {
                             Music { class: "w-4 h-4 text-primary/50 bg-base-100" }
                           }
-                          if pack.folder_path == current() {
+                          if pack.config_path == current() {
                             // Use folder_path for comparison
                             div { class: "absolute inset-0 bg-base-300/70 flex items-center justify-center ",
                               Check { class: "text-white w-6 h-6" }

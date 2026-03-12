@@ -12,35 +12,15 @@ use crate::libs::soundpack::format::SoundpackType;
 
 // ===== SOUNDPACK METADATA =====
 
-fn default_soundpack_type() -> SoundpackType {
-    SoundpackType::Keyboard
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SoundpackMetadata {
-    /// Unique ID: `{source}/{type}/{folder}` e.g. "builtin/keyboard/oreo"
     pub id: String,
     pub name: String,
     pub author: Option<String>,
-    pub description: Option<String>,
-    pub version: String,
     pub tags: Vec<String>,
     pub icon: Option<String>,
-    #[serde(default = "default_soundpack_type")]
     pub soundpack_type: SoundpackType,
-    /// Same as id - used for loading. Kept for backward compat in serialized cache.
-    #[serde(default)]
-    pub folder_path: String,
-    pub last_modified: u64,
-    pub last_accessed: u64,
-    // Validation fields
-    pub config_version: Option<u32>,
-    pub is_valid_v2: bool,
-    pub validation_status: String,
-    pub can_be_converted: bool,
-    // Error tracking
-    #[serde(default)]
-    pub last_error: Option<String>,
+    pub config_path: String,
 }
 
 // ===== SOUNDPACK CACHE =====
@@ -73,7 +53,8 @@ impl SoundpackCache {
 
     /// Add or update soundpack metadata.
     pub fn add_soundpack(&mut self, metadata: SoundpackMetadata) {
-        self.soundpacks.insert(metadata.id.clone(), metadata);
+        self.soundpacks
+            .insert(metadata.config_path.clone(), metadata);
     }
 
     /// Update count based on current soundpacks in cache.
@@ -203,30 +184,15 @@ pub fn capture_soundpack_loading_error(
 
     let mut cache = load_cache();
 
-    if let Some(existing_metadata) = cache.soundpacks.get_mut(soundpack_id) {
-        existing_metadata.last_error = Some(error.to_string());
-        existing_metadata.validation_status = "loading_error".to_string();
-    } else {
+    if !cache.soundpacks.contains_key(soundpack_id) {
         let error_metadata = SoundpackMetadata {
             id: soundpack_id.to_string(),
+            config_path: soundpack_id.to_string(),
             name: format!("Error: {}", soundpack_id),
             author: None,
-            description: Some(format!("Loading failed: {}", error)),
-            version: "unknown".to_string(),
             tags: vec!["error".to_string()],
             icon: None,
             soundpack_type,
-            folder_path: soundpack_id.to_string(),
-            last_modified: 0,
-            last_accessed: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-            config_version: None,
-            is_valid_v2: false,
-            validation_status: "loading_error".to_string(),
-            can_be_converted: false,
-            last_error: Some(error.to_string()),
         };
         cache
             .soundpacks
@@ -291,7 +257,7 @@ fn scan_soundpack_type(
         match super::metadata::load_soundpack_metadata(&soundpack_path, &soundpack_id, is_mouse) {
             Ok(mut metadata) => {
                 metadata.id = soundpack_id.clone();
-                metadata.folder_path = soundpack_id.clone();
+                metadata.config_path = soundpack_id.clone();
                 log::info!("✅ Successfully loaded metadata for: {}", soundpack_id);
                 cache.soundpacks.insert(soundpack_id, metadata);
             }
@@ -307,26 +273,17 @@ fn insert_error_metadata(
     cache: &mut SoundpackCache,
     full_soundpack_id: &str,
     soundpack_name: &str,
-    error: String,
+    _error: String,
     soundpack_type: SoundpackType,
 ) {
     let error_metadata = SoundpackMetadata {
         id: full_soundpack_id.to_string(),
-        folder_path: full_soundpack_id.to_string(),
+        config_path: full_soundpack_id.to_string(),
         name: format!("Error: {}", soundpack_name),
         author: None,
-        description: Some(format!("Failed to load: {}", error)),
-        version: "unknown".to_string(),
         tags: vec!["error".to_string()],
         icon: None,
         soundpack_type,
-        last_modified: 0,
-        last_accessed: 0,
-        config_version: None,
-        is_valid_v2: false,
-        validation_status: "error".to_string(),
-        can_be_converted: false,
-        last_error: Some(error),
     };
     cache
         .soundpacks

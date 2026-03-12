@@ -229,4 +229,130 @@ impl AudioContext {
             None => true, // Default device is always considered available
         }
     }
+
+    pub fn update_keyboard_context(
+        &self,
+        samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
+        key_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
+    ) -> Result<(), String> {
+        let (audio_samples, channels, sample_rate) = samples;
+        let sample_count = audio_samples.len();
+        let key_mapping_count = key_mappings.len();
+
+        // Update keyboard samples
+        if let Ok(mut cached) = self.keyboard_samples.lock() {
+            *cached = Some((audio_samples, channels, sample_rate));
+            log::info!("🎹 Updated keyboard samples: {} samples", sample_count);
+        } else {
+            return Err("Failed to acquire lock on keyboard_samples".to_string());
+        }
+
+        // Update key mappings
+        if let Ok(mut key_map) = self.key_map.lock() {
+            let old_count = key_map.len();
+            key_map.clear();
+
+            for (key, mappings) in key_mappings {
+                let converted_mappings: Vec<[f32; 2]> = mappings
+                    .into_iter()
+                    .map(|(start, end)| [start as f32, end as f32])
+                    .collect();
+                key_map.insert(key.clone(), converted_mappings);
+            }
+
+            log::info!(
+                "🗝️ Updated key mappings: {} -> {} keys",
+                old_count,
+                key_map.len()
+            );
+        } else {
+            return Err("Failed to acquire lock on key_map".to_string());
+        }
+
+        // Clear active keyboard audio state
+        if let Ok(mut sinks) = self.key_sinks.lock() {
+            let old_sinks = sinks.len();
+            sinks.clear();
+            if old_sinks > 0 {
+                log::info!("🔇 Cleared {} active key sinks", old_sinks);
+            }
+        }
+
+        if let Ok(mut pressed) = self.key_pressed.lock() {
+            let old_pressed = pressed.len();
+            pressed.clear();
+            if old_pressed > 0 {
+                log::info!("⌨️ Cleared {} pressed keys", old_pressed);
+            }
+        }
+
+        log::info!(
+            "✅ Successfully loaded {} keyboard sounds",
+            key_mapping_count
+        );
+        Ok(())
+    }
+
+    pub fn update_mouse_context(
+        &self,
+        samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
+        mouse_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
+    ) -> Result<(), String> {
+        let (audio_samples, channels, sample_rate) = samples;
+        let sample_count = audio_samples.len();
+        let mouse_mapping_count = mouse_mappings.len();
+
+        // Update mouse samples
+        if let Ok(mut cached) = self.mouse_samples.lock() {
+            *cached = Some((audio_samples, channels, sample_rate));
+            log::info!("🖱️ Updated mouse samples: {} samples", sample_count);
+        } else {
+            return Err("Failed to acquire lock on mouse_samples".to_string());
+        }
+
+        // Update mouse mappings
+        if let Ok(mut mouse_map) = self.mouse_map.lock() {
+            let old_count = mouse_map.len();
+            mouse_map.clear();
+
+            for (button, mappings) in mouse_mappings {
+                let converted_mappings: Vec<[f32; 2]> = mappings
+                    .into_iter()
+                    .map(|(start, end)| [start as f32, end as f32])
+                    .collect();
+                mouse_map.insert(button.clone(), converted_mappings);
+            }
+
+            log::info!(
+                "🖱️ Updated mouse mappings: {} -> {} buttons",
+                old_count,
+                mouse_map.len()
+            );
+        } else {
+            return Err("Failed to acquire lock on mouse_map".to_string());
+        }
+
+        // Clear active mouse audio state
+        if let Ok(mut mouse_sinks) = self.mouse_sinks.lock() {
+            let old_sinks = mouse_sinks.len();
+            mouse_sinks.clear();
+            if old_sinks > 0 {
+                log::info!("🔇 Cleared {} active mouse sinks", old_sinks);
+            }
+        }
+
+        if let Ok(mut mouse_pressed) = self.mouse_pressed.lock() {
+            let old_pressed = mouse_pressed.len();
+            mouse_pressed.clear();
+            if old_pressed > 0 {
+                log::info!("🖱️ Cleared {} pressed mouse buttons", old_pressed);
+            }
+        }
+
+        log::info!(
+            "✅ Successfully loaded mouse soundpack ({} mouse mappings) - Memory properly cleaned",
+            mouse_mapping_count
+        );
+        Ok(())
+    }
 }

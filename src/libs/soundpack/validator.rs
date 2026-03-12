@@ -26,25 +26,8 @@ pub struct SoundpackValidationResult {
 }
 
 /// Detect and validate soundpack configuration version and structure
-pub fn validate_soundpack_config(config_path: &str) -> SoundpackValidationResult {
-    let content = match crate::utils::path::read_file_contents(config_path) {
-        Ok(content) => content,
-        Err(e) => {
-            return SoundpackValidationResult {
-                status: SoundpackValidationStatus::InvalidStructure(format!(
-                    "Cannot read config file: {}",
-                    e
-                )),
-                config_version: None,
-                detected_version: None,
-                is_valid_v2: false,
-                can_be_converted: false,
-                message: format!("Failed to read config file: {}", e),
-            };
-        }
-    };
-
-    let config: Value = match serde_json::from_str(&content) {
+pub fn validate_soundpack_config(content: &str) -> SoundpackValidationResult {
+    let config: Value = match serde_json::from_str(content) {
         Ok(config) => config,
         Err(e) => {
             return SoundpackValidationResult {
