@@ -121,30 +121,45 @@ pub mod soundpacks {
         get_system_app_data_dir().join("soundpacks")
     }
 
-    /// Get soundpack directory path for a specific soundpack ID
-    /// Checks built-in location first, then custom location
+    /// Get soundpack directory path for a specific soundpack ID.
+    ///
+    /// Supports two formats:
+    /// - **New format**: `{source}/{type}/{folder}` e.g. `builtin/keyboard/oreo`
+    /// - **Legacy format**: folder name only, with `is_mouse` for type. Resolves custom first, then builtin.
     pub fn find_soundpack_dir(soundpack_id: &str, is_mouse: bool) -> String {
-        let parts = vec![if is_mouse { "mouse" } else { "keyboard" }, soundpack_id];
+        use crate::libs::soundpack::id::SoundpackId;
 
-        // Check custom location first
-        let mut soundpack_dir = get_custom_soundpacks_dir();
-        for part in &parts {
-            soundpack_dir = soundpack_dir.join(part);
+        if let Some(id) = SoundpackId::parse(soundpack_id) {
+            return id.to_path_string();
         }
+
+        // Legacy format: folder name only - check custom first, then builtin
+        let type_dir = if is_mouse { "mouse" } else { "keyboard" };
+        let mut soundpack_dir = get_custom_soundpacks_dir().join(type_dir).join(soundpack_id);
         let config_path = soundpack_dir.join("config.json");
 
-        let final_soundpack_dir = if config_path.exists() {
-            soundpack_dir
-        } else {
-            // Fallback to built-in location
-            soundpack_dir = get_builtin_soundpacks_dir();
-            for part in parts {
-                soundpack_dir = soundpack_dir.join(part);
-            }
-            soundpack_dir
-        };
+        if !config_path.exists() {
+            soundpack_dir = get_builtin_soundpacks_dir().join(type_dir).join(soundpack_id);
+        }
 
-        final_soundpack_dir.to_string_lossy().to_string()
+        soundpack_dir.to_string_lossy().to_string()
+    }
+
+    /// Resolve a soundpack ID to absolute path. For legacy IDs (folder name only),
+    /// requires is_mouse to determine type.
+    pub fn resolve_soundpack_path(soundpack_id: &str, is_mouse: bool) -> std::path::PathBuf {
+        use crate::libs::soundpack::id::SoundpackId;
+
+        if let Some(id) = SoundpackId::parse(soundpack_id) {
+            return id.to_absolute_path();
+        }
+
+        let type_dir = if is_mouse { "mouse" } else { "keyboard" };
+        let custom_path = get_custom_soundpacks_dir().join(type_dir).join(soundpack_id);
+        if custom_path.join("config.json").exists() {
+            return custom_path;
+        }
+        get_builtin_soundpacks_dir().join(type_dir).join(soundpack_id)
     }
 
     /// Ensure soundpack directories exist (keyboard and mouse)

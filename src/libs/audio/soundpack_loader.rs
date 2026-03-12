@@ -688,18 +688,39 @@ fn create_soundpack_metadata(
     soundpack_path: &str,
     soundpack: &SoundPack,
 ) -> Result<SoundpackMetadata, String> {
-    // Extract the soundpack ID from the full path
-    // e.g., "/path/to/soundpacks/keyboard/Apex by teia" -> "keyboard/Apex by teia"
-    let soundpacks_dir = crate::utils::path::get_soundpacks_dir_absolute();
-    let id = if let Ok(relative_path) =
-        std::path::Path::new(soundpack_path).strip_prefix(&soundpacks_dir)
-    {
-        relative_path.to_string_lossy().replace('\\', "/")
+    let path = std::path::Path::new(soundpack_path);
+    let builtin_base = paths::soundpacks::get_builtin_soundpacks_dir();
+    let custom_base = paths::soundpacks::get_custom_soundpacks_dir();
+
+    let id = if let Ok(rel) = path.strip_prefix(&custom_base) {
+        let parts: Vec<_> = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect();
+        if parts.len() >= 2 {
+            let source = "custom";
+            let typ = parts[0].as_ref();
+            let folder = parts[1].as_ref();
+            format!("{}/{}/{}", source, typ, folder)
+        } else {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        }
+    } else if let Ok(rel) = path.strip_prefix(&builtin_base) {
+        let parts: Vec<_> = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect();
+        if parts.len() >= 2 {
+            let source = "builtin";
+            let typ = parts[0].as_ref();
+            let folder = parts[1].as_ref();
+            format!("{}/{}/{}", source, typ, folder)
+        } else {
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        }
     } else {
-        // Fallback to just the folder name if we can't get relative path
-        std::path::Path::new(soundpack_path)
-            .file_name()
-            .and_then(|name| name.to_str())
+        path.file_name()
+            .and_then(|n| n.to_str())
             .unwrap_or("unknown")
             .to_string()
     };

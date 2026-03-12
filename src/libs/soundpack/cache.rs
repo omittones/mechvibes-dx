@@ -1,5 +1,6 @@
 //! Soundpack metadata cache loading, saving, and refresh operations.
 
+use crate::libs::soundpack::id::{SoundpackId, SoundpackSource};
 use crate::state::paths;
 use crate::utils::{data, path};
 use std::path::Path;
@@ -17,7 +18,8 @@ fn default_soundpack_type() -> SoundpackType {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SoundpackMetadata {
-    pub id: String, // Original ID from soundpack config (should not be modified)
+    /// Unique ID: `{source}/{type}/{folder}` e.g. "builtin/keyboard/oreo"
+    pub id: String,
     pub name: String,
     pub author: Option<String>,
     pub description: Option<String>,
@@ -25,9 +27,10 @@ pub struct SoundpackMetadata {
     pub tags: Vec<String>,
     pub icon: Option<String>,
     #[serde(default = "default_soundpack_type")]
-    pub soundpack_type: SoundpackType, // Type of soundpack (Keyboard or Mouse)
+    pub soundpack_type: SoundpackType,
+    /// Same as id - used for loading. Kept for backward compat in serialized cache.
     #[serde(default)]
-    pub folder_path: String, // Relative path from soundpacks directory (e.g., "keyboard/Super Paper Mario Talk")
+    pub folder_path: String,
     pub last_modified: u64,
     pub last_accessed: u64,
     // Validation fields
@@ -63,7 +66,7 @@ impl SoundpackCache {
         Self {
             soundpacks: HashMap::new(),
             last_scan: 0,
-            cache_version: 4, // Current version with error tracking support
+            cache_version: 5, // Version 5: path-based unique IDs (source/type/folder)
             count: SoundpackCount::default(),
         }
     }
@@ -147,8 +150,18 @@ pub fn refresh_cache(cache: &mut SoundpackCache) {
         "📂 Scanning built-in soundpacks in: {}",
         builtin_soundpacks_dir
     );
-    scan_soundpack_type(cache, &builtin_soundpacks_dir, false);
-    scan_soundpack_type(cache, &builtin_soundpacks_dir, true);
+    scan_soundpack_type(
+        cache,
+        &builtin_soundpacks_dir,
+        false,
+        SoundpackSource::Builtin,
+    );
+    scan_soundpack_type(
+        cache,
+        &builtin_soundpacks_dir,
+        true,
+        SoundpackSource::Builtin,
+    );
 
     let custom_soundpacks_dir = paths::soundpacks::get_custom_soundpacks_dir()
         .to_string_lossy()
@@ -157,8 +170,13 @@ pub fn refresh_cache(cache: &mut SoundpackCache) {
         "📂 Scanning custom soundpacks in: {}",
         custom_soundpacks_dir
     );
-    scan_soundpack_type(cache, &custom_soundpacks_dir, false);
-    scan_soundpack_type(cache, &custom_soundpacks_dir, true);
+    scan_soundpack_type(
+        cache,
+        &custom_soundpacks_dir,
+        false,
+        SoundpackSource::Custom,
+    );
+    scan_soundpack_type(cache, &custom_soundpacks_dir, true, SoundpackSource::Custom);
 
     cache.update_count();
 
@@ -228,41 +246,60 @@ fn cache_file_path() -> String {
         .to_string()
 }
 
-fn scan_soundpack_type(cache: &mut SoundpackCache, soundpacks_dir: &str, is_mouse: bool) {
+fn scan_soundpack_type(
+    cache: &mut SoundpackCache,
+    soundpacks_dir: &str,
+    is_mouse: bool,
+    source: SoundpackSource,
+) {
+    let soundpack_type = if is_mouse {
+        SoundpackType::Mouse
+    } else {
+        SoundpackType::Keyboard
+    };
     let type_dir =
         std::path::Path::new(soundpacks_dir).join(if is_mouse { "mouse" } else { "keyboard" });
     log::info!("📂 Scanning soundpacks in: {}", type_dir.display());
 
-    if type_dir.exists() {
-        if let Ok(entries) = std::fs::read_dir(&type_dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
-                if let Some(soundpack_id) = entry.file_name().to_str()
-                    && let Some(soundpack_path) = entry.path().to_str()
-                {
-                    let soundpack_id = soundpack_id.to_string();
-                    log::info!("🔍 Processing soundpack {}", soundpack_id);
+    if !type_dir.exists() {
+        log::error!("⚠️ Directory does not exist: {}", type_dir.display());
+        return;
+    }
 
-                    match super::metadata::load_soundpack_metadata(
-                        soundpack_path,
-                        &soundpack_id,
-                        is_mouse,
-                    ) {
-                        Ok(metadata) => {
-                            log::info!("✅ Successfully loaded metadata for: {}", soundpack_id);
-                            cache.soundpacks.insert(soundpack_id, metadata);
-                        }
-                        Err(e) => {
-                            log::info!("❌ Failed to load metadata for {}: {}", soundpack_id, e);
-                            insert_error_metadata(cache, &soundpack_id, &soundpack_id, e, is_mouse);
-                        }
-                    }
-                }
-            }
-        } else {
-            log::info!("⚠️ Failed to read directory: {}", type_dir.display());
+    let entries = match std::fs::read_dir(&type_dir) {
+        Ok(e) => e,
+        Err(e) => {
+            log::error!("⚠️ Failed to read directory: {}: {}", type_dir.display(), e);
+            return;
         }
-    } else {
-        log::info!("⚠️ Directory does not exist: {}", type_dir.display());
+    };
+
+    for entry in entries {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                log::error!("⚠️ Failed to read directory: {}: {}", type_dir.display(), e);
+                continue;
+            }
+        };
+
+        let folder_name = entry.file_name().to_string_lossy().to_string();
+        let soundpack_path = entry.path().to_string_lossy().to_string();
+        let soundpack_id = SoundpackId::new(source, soundpack_type, &folder_name).to_string();
+        log::info!("🔍 Processing soundpack {}", soundpack_id);
+
+        match super::metadata::load_soundpack_metadata(&soundpack_path, &soundpack_id, is_mouse) {
+            Ok(mut metadata) => {
+                metadata.id = soundpack_id.clone();
+                metadata.folder_path = soundpack_id.clone();
+                log::info!("✅ Successfully loaded metadata for: {}", soundpack_id);
+                cache.soundpacks.insert(soundpack_id, metadata);
+            }
+            Err(e) => {
+                log::info!("❌ Failed to load metadata for {}: {}", soundpack_id, e);
+                insert_error_metadata(cache, &soundpack_id, &folder_name, e, soundpack_type);
+            }
+        }
     }
 }
 
@@ -271,15 +308,11 @@ fn insert_error_metadata(
     full_soundpack_id: &str,
     soundpack_name: &str,
     error: String,
-    is_mouse: bool,
+    soundpack_type: SoundpackType,
 ) {
-    let soundpack_type = if is_mouse {
-        SoundpackType::Mouse
-    } else {
-        SoundpackType::Keyboard
-    };
     let error_metadata = SoundpackMetadata {
         id: full_soundpack_id.to_string(),
+        folder_path: full_soundpack_id.to_string(),
         name: format!("Error: {}", soundpack_name),
         author: None,
         description: Some(format!("Failed to load: {}", error)),
@@ -287,7 +320,6 @@ fn insert_error_metadata(
         tags: vec!["error".to_string()],
         icon: None,
         soundpack_type,
-        folder_path: full_soundpack_id.to_string(),
         last_modified: 0,
         last_accessed: 0,
         config_version: None,

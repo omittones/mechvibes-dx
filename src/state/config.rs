@@ -128,6 +128,12 @@ impl AppConfig {
         // Load config from file, falling back to defaults if it doesn't exist or is invalid
         match data::load_json_from_file::<AppConfig>(&config_path) {
             Ok(mut config) => {
+                // Migrate legacy soundpack IDs to new format (source/type/folder)
+                let migrated = Self::migrate_soundpack_ids(&mut config);
+                if migrated {
+                    let _ = config.save();
+                }
+
                 // Sync auto_start with actual registry state
                 let actual_auto_start = crate::utils::auto_startup::get_auto_startup_state();
                 if config.auto_start != actual_auto_start {
@@ -156,6 +162,50 @@ impl AppConfig {
     pub fn save(&self) -> Result<(), String> {
         let config_path = paths::data::config_json();
         data::save_json_to_file(self, &config_path)
+    }
+
+    /// Migrate legacy soundpack IDs (folder name only) to new format (source/type/folder).
+    /// Returns true if any migration was performed.
+    fn migrate_soundpack_ids(config: &mut Self) -> bool {
+        use crate::libs::soundpack::id::SoundpackId;
+
+        let mut migrated = false;
+
+        if !config.keyboard_soundpack.is_empty() && !SoundpackId::is_new_format(&config.keyboard_soundpack) {
+            let builtin = paths::soundpacks::get_builtin_soundpacks_dir().join("keyboard").join(&config.keyboard_soundpack);
+            let custom = paths::soundpacks::get_custom_soundpacks_dir().join("keyboard").join(&config.keyboard_soundpack);
+            let new_id = if custom.join("config.json").exists() {
+                Some(format!("custom/keyboard/{}", config.keyboard_soundpack))
+            } else if builtin.join("config.json").exists() {
+                Some(format!("builtin/keyboard/{}", config.keyboard_soundpack))
+            } else {
+                None
+            };
+            if let Some(id) = new_id {
+                log::info!("🔧 Migrated keyboard soundpack ID: {} -> {}", config.keyboard_soundpack, id);
+                config.keyboard_soundpack = id;
+                migrated = true;
+            }
+        }
+
+        if !config.mouse_soundpack.is_empty() && !SoundpackId::is_new_format(&config.mouse_soundpack) {
+            let builtin = paths::soundpacks::get_builtin_soundpacks_dir().join("mouse").join(&config.mouse_soundpack);
+            let custom = paths::soundpacks::get_custom_soundpacks_dir().join("mouse").join(&config.mouse_soundpack);
+            let new_id = if custom.join("config.json").exists() {
+                Some(format!("custom/mouse/{}", config.mouse_soundpack))
+            } else if builtin.join("config.json").exists() {
+                Some(format!("builtin/mouse/{}", config.mouse_soundpack))
+            } else {
+                None
+            };
+            if let Some(id) = new_id {
+                log::info!("🔧 Migrated mouse soundpack ID: {} -> {}", config.mouse_soundpack, id);
+                config.mouse_soundpack = id;
+                migrated = true;
+            }
+        }
+
+        migrated
     }
 }
 

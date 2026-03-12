@@ -18,9 +18,20 @@ pub struct SoundpackInfo {
     pub id: String,
 }
 
-/// Check if a soundpack ID already exists in the app state
+/// Check if a soundpack ID already exists in the app state.
+/// Supports both full IDs (custom/keyboard/name) and folder names for conflict detection.
 pub fn check_soundpack_id_conflict(id: &str, soundpacks: &[SoundpackMetadata]) -> bool {
-    soundpacks.iter().any(|pack| pack.id == id)
+    use crate::libs::soundpack::id::SoundpackId;
+
+    if SoundpackId::is_new_format(id) {
+        return soundpacks.iter().any(|pack| pack.id == id);
+    }
+    // Legacy: check if custom/keyboard/{id} or custom/mouse/{id} exists
+    soundpacks.iter().any(|pack| {
+        pack.id == id
+            || pack.id == format!("custom/keyboard/{}", id)
+            || pack.id == format!("custom/mouse/{}", id)
+    })
 }
 
 /// Extract soundpack ID from ZIP without extracting files
@@ -165,9 +176,12 @@ pub fn extract_and_install_soundpack(file_path: &str) -> Result<SoundpackInfo, S
     path::write_file_contents(&config_path.to_string_lossy(), &final_config_content)
         .map_err(|e| format!("Failed to write config.json: {}", e))?;
 
+    // Return full ID for new format (custom/type/folder)
+    let full_id = format!("custom/{}/{}", soundpack_type, soundpack_id);
+
     Ok(SoundpackInfo {
         name: soundpack_name,
-        id: soundpack_id,
+        id: full_id,
     })
 }
 
@@ -280,9 +294,11 @@ pub fn extract_and_install_soundpack_with_type(
     std::fs::write(&config_path, updated_config)
         .map_err(|e| format!("Failed to write updated config.json: {}", e))?;
 
+    let full_id = format!("custom/{}/{}", soundpack_type, soundpack_id);
+
     Ok(SoundpackInfo {
         name: soundpack_name,
-        id: soundpack_id,
+        id: full_id,
     })
 }
 

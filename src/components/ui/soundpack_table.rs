@@ -225,24 +225,28 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
 
     // Handler for delete button click
     let on_confirm_delete = {
-        let soundpack_id = soundpack.id.clone();
+        let path_to_use = if !soundpack.folder_path.is_empty() {
+            soundpack.folder_path.clone()
+        } else {
+            soundpack.id.clone()
+        };
         let trigger = state_trigger.clone();
         move |_| {
-            let soundpack_id = soundpack_id.clone();
+            let path_to_use = path_to_use.clone();
             let trigger = trigger.clone();
             spawn(async move {
                 match delete_soundpack(
-                    &soundpack_id,
+                    &path_to_use,
                     soundpack.soundpack_type == SoundpackType::Mouse,
                 ) {
                     Ok(_) => {
-                        log::info!("✅ Successfully deleted soundpack: {}", soundpack_id);
+                        log::info!("✅ Successfully deleted soundpack: {}", path_to_use);
                         // The modal will close automatically due to form method="dialog"
                         // Trigger state refresh to update the UI
                         trigger.call(());
                     }
                     Err(e) => {
-                        log::error!("❌ Failed to delete soundpack {}: {}", soundpack_id, e);
+                        log::error!("❌ Failed to delete soundpack {}: {}", path_to_use, e);
                         // Could show an error modal here if needed
                     }
                 }

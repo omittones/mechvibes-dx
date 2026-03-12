@@ -8,6 +8,7 @@
 
 pub mod cache;
 pub mod format;
+pub mod id;
 pub mod installer;
 pub mod metadata;
 pub mod validator;

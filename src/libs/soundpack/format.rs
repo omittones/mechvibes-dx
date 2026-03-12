@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 // ===== SOUNDPACK TYPES =====
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum SoundpackType {
     Keyboard,
     Mouse,
@@ -84,4 +84,85 @@ pub struct SoundPack {
     #[serde(default = "default_config_version")]
     pub config_version_num: u32, // Internal config version number
     pub definitions: HashMap<String, KeyDefinition>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+
+    /// Parses all committed soundpacks and verifies parsing works for each.
+    #[test]
+    fn parse_all_committed_soundpacks() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let soundpacks_dir = manifest_dir.join("soundpacks");
+
+        if !soundpacks_dir.exists() {
+            panic!(
+                "soundpacks directory not found at {}",
+                soundpacks_dir.display()
+            );
+        }
+
+        let mut parsed_count = 0;
+        let mut errors = Vec::new();
+
+        for device_type in ["keyboard", "mouse"] {
+            let type_dir = soundpacks_dir.join(device_type);
+            if !type_dir.exists() {
+                continue;
+            }
+
+            let entries = fs::read_dir(&type_dir).unwrap_or_else(|e| {
+                panic!("Failed to read {}: {}", type_dir.display(), e);
+            });
+
+            for entry in entries.filter_map(|e| e.ok()) {
+                let config_path = entry.path().join("config.json");
+                if !config_path.exists() {
+                    continue;
+                }
+
+                let path_str = config_path.display().to_string();
+                match fs::read_to_string(&config_path) {
+                    Ok(content) => match serde_json::from_str::<SoundPack>(&content) {
+                        Ok(soundpack) => {
+                            assert!(
+                                !soundpack.definitions.is_empty(),
+                                "{}: soundpack has no definitions",
+                                path_str
+                            );
+                            assert!(
+                                !soundpack.name.is_empty(),
+                                "{}: soundpack has empty name",
+                                path_str
+                            );
+                            parsed_count += 1;
+                        }
+                        Err(e) => {
+                            errors.push(format!("{}: parse error: {}", path_str, e));
+                        }
+                    },
+                    Err(e) => {
+                        errors.push(format!("{}: read error: {}", path_str, e));
+                    }
+                }
+            }
+        }
+
+        if !errors.is_empty() {
+            panic!(
+                "Failed to parse {} soundpack(s):\n{}",
+                errors.len(),
+                errors.join("\n")
+            );
+        }
+
+        assert!(
+            parsed_count > 0,
+            "No soundpacks found to parse in {}",
+            soundpacks_dir.display()
+        );
+    }
 }
