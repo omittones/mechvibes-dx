@@ -1,7 +1,10 @@
+//! Load soundpack metadata from config files.
+
+use crate::libs::soundpack::cache::SoundpackMetadata;
+use crate::libs::soundpack::format::SoundpackType;
+use crate::libs::soundpack::validator::{SoundpackValidationStatus, validate_soundpack_config};
 use crate::state::paths;
-use crate::state::soundpack::{SoundpackMetadata, SoundpackType};
 use crate::utils::config_converter;
-use crate::utils::soundpack_validator::{SoundpackValidationStatus, validate_soundpack_config};
 use std::fs;
 use std::path::PathBuf;
 
@@ -15,41 +18,36 @@ pub fn load_soundpack_metadata(
         .join("config.json")
         .to_string_lossy()
         .to_string();
-    let mut last_error: Option<String> = None; // Validate the soundpack configuration first
+    let mut last_error: Option<String> = None;
+
     let validation_result = validate_soundpack_config(&config_path);
 
-    // If it's a V1 config that can be converted, auto-convert it
     if validation_result.status == SoundpackValidationStatus::VersionOneNeedsConversion
         && validation_result.can_be_converted
     {
-        // Create backup of original config
         let backup_path = format!("{}.v1.backup", config_path);
         if let Err(e) = fs::copy(&config_path, &backup_path) {
-            let error_msg = format!("Failed to create backup for {}: {}", soundpack_id, e);
-            last_error = Some(error_msg);
-        } // Convert V1 to V2
+            last_error = Some(format!(
+                "Failed to create backup for {}: {}",
+                soundpack_id, e
+            ));
+        }
         match config_converter::convert_v1_to_v2(&config_path, &config_path, None) {
-            Ok(()) => {
-                // Successfully converted
-            }
+            Ok(()) => {}
             Err(e) => {
                 let error_msg = format!("Failed to convert {} from V1 to V2: {}", soundpack_id, e);
-                // Restore backup if conversion failed
-                if fs::copy(&backup_path, &config_path).is_ok() {
-                    // Restored backup
-                }
-                // Return error for conversion failure
+                if fs::copy(&backup_path, &config_path).is_ok() {}
                 return Err(error_msg);
             }
         }
     }
+
     let content =
         fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config: {}", e))?;
 
     let mut config: serde_json::Value =
         serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
 
-    // Check if this is V2 config with multi method and convert to single method
     if let Some(definition_method) = config.get("definition_method").and_then(|v| v.as_str()) {
         if definition_method == "multi" {
             log::debug!(
@@ -64,7 +62,6 @@ pub fn load_soundpack_metadata(
                 return Err(format!("Failed to convert multi to single method: {}", e));
             }
 
-            // Re-read the converted config
             let new_content = fs::read_to_string(&config_path)
                 .map_err(|e| format!("Failed to re-read converted config: {}", e))?;
             config = serde_json::from_str(&new_content)
@@ -74,13 +71,11 @@ pub fn load_soundpack_metadata(
         }
     }
 
-    // Debug: Check if config has audio_file field
     let audio_file = config.get("audio_file").and_then(|v| v.as_str());
     log::debug!("🔍 [CACHE DEBUG] soundpack_id: {}", soundpack_id);
     log::debug!("🔍 [CACHE DEBUG] config_path: {}", config_path);
     log::debug!("🔍 [CACHE DEBUG] audio_file in config: {:?}", audio_file);
 
-    // If audio_file exists, check if the actual file exists
     if let Some(audio_filename) = audio_file {
         let soundpack_dir = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
         let full_audio_path = format!(
@@ -127,14 +122,13 @@ pub fn load_soundpack_metadata(
         })
         .unwrap_or_default();
 
-    // Re-validate after potential conversion
     let final_validation = validate_soundpack_config(&config_path);
 
-    // Get file stats
     let metadata =
         fs::metadata(&config_path).map_err(|e| format!("Failed to get metadata: {}", e))?;
+
     Ok(SoundpackMetadata {
-        id: soundpack_id.to_string(), // Use soundpack_id (with prefix) instead of config ID
+        id: soundpack_id.to_string(),
         name,
         author: config
             .get("author")
@@ -148,7 +142,6 @@ pub fn load_soundpack_metadata(
         version,
         tags,
         icon: {
-            // Generate dynamic asset URL
             if let Some(icon_filename) = config.get("icon").and_then(|v| v.as_str()) {
                 let icon_path = format!(
                     "{}/{}",
@@ -162,7 +155,6 @@ pub fn load_soundpack_metadata(
                     std::path::Path::new(&icon_path).exists()
                 );
                 if std::path::Path::new(&icon_path).exists() {
-                    // Generate dynamic asset URL instead of base64 data URI
                     let asset_url = format!("/soundpack-images/{}/{}", soundpack_id, icon_filename);
                     log::info!("✅ Generated asset URL for {}: {}", soundpack_id, asset_url);
                     Some(asset_url)
@@ -171,11 +163,11 @@ pub fn load_soundpack_metadata(
                         "❌ Icon not found for {}, setting empty string",
                         soundpack_id
                     );
-                    Some(String::new()) // Empty string if icon file not found
+                    Some(String::new())
                 }
             } else {
                 log::info!("ℹ️  No icon specified for {}", soundpack_id);
-                Some(String::new()) // Empty string if no icon specified
+                Some(String::new())
             }
         },
         soundpack_type: if is_mouse {
@@ -183,15 +175,14 @@ pub fn load_soundpack_metadata(
         } else {
             SoundpackType::Keyboard
         },
-        folder_path: soundpack_id.to_string(), // Store the relative path (e.g., "keyboard/Super Paper Mario Talk")
+        folder_path: soundpack_id.to_string(),
         last_modified: metadata
             .modified()
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs(),
-        last_accessed: 0, // Will be updated when accessed
-        // Validation fields
+        last_accessed: 0,
         config_version: final_validation.config_version,
         is_valid_v2: final_validation.is_valid_v2,
         validation_status: match final_validation.status {
@@ -204,7 +195,6 @@ pub fn load_soundpack_metadata(
             }
         },
         can_be_converted: final_validation.can_be_converted,
-        // Error tracking - clear error if we successfully loaded metadata
         last_error: last_error,
     })
 }

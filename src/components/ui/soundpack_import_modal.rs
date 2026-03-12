@@ -1,13 +1,15 @@
 use crate::{
-    components::ui::{ ImportStep, ProgressStep },
-    state::app::{ use_app_state, use_state_trigger },
-    utils::delay,
-    utils::soundpack_installer::{
-        check_soundpack_id_conflict,
-        extract_and_install_soundpack_with_type,
-        get_soundpack_id_from_zip,
+    components::ui::{ImportStep, ProgressStep},
+    libs::soundpack::{
+        format::SoundpackType,
+        installer::{
+            check_soundpack_id_conflict, extract_and_install_soundpack_with_type,
+            get_soundpack_id_from_zip,
+        },
+        validator::{validate_soundpack_structure, validate_zip_file},
     },
-    utils::soundpack_validator::{ validate_soundpack_structure, validate_zip_file },
+    state::app::{use_app_state, use_state_trigger},
+    utils::delay,
 };
 use dioxus::prelude::*;
 use lucide_dioxus::FolderArchive;
@@ -17,8 +19,8 @@ use std::sync::Arc;
 pub fn SoundpackImportModal(
     modal_id: String,
     audio_ctx: Arc<crate::libs::audio::AudioContext>,
-    target_soundpack_type: Option<crate::state::soundpack::SoundpackType>,
-    on_import_success: EventHandler<()>
+    target_soundpack_type: Option<SoundpackType>,
+    on_import_success: EventHandler<()>,
 ) -> Element {
     // Loading
     let is_loading = use_signal(|| false);
@@ -110,11 +112,11 @@ pub fn SoundpackImportModal(
                 // Step 1: Open file dialog and select file
                 // ===========================================
                 // Open file dialog to select ZIP file
-                let file_dialog = rfd::AsyncFileDialog
-                    ::new()
+                let file_dialog = rfd::AsyncFileDialog::new()
                     .add_filter("ZIP Files", &["zip"])
                     .set_title("Select Sound Pack ZIP File")
-                    .pick_file().await;
+                    .pick_file()
+                    .await;
 
                 let file_handle = match file_dialog {
                     Some(handle) => handle,
@@ -195,9 +197,10 @@ pub fn SoundpackImportModal(
 
                 log::info!("⚒️ Installing soundpack ...");
 
-                let soundpack_info = match
-                    extract_and_install_soundpack_with_type(&file_path, target_soundpack_type)
-                {
+                let soundpack_info = match extract_and_install_soundpack_with_type(
+                    &file_path,
+                    target_soundpack_type,
+                ) {
                     Ok(info) => info,
                     Err(e) => {
                         error_step.set(ImportStep::Installing);

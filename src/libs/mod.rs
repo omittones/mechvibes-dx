@@ -1,5 +1,6 @@
 pub mod audio;
 pub mod device_manager;
+pub mod soundpack;
 pub mod input_device_manager;
 pub mod input_manager;
 pub mod listeners;

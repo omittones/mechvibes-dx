@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
+use crate::libs::soundpack::cache::SoundpackMetadata;
+use crate::libs::soundpack::cache::{capture_soundpack_loading_error, load_cache, save_cache};
+use crate::libs::soundpack::format::{SoundPack, SoundpackType};
 use crate::state::config::AppConfig;
 use crate::state::paths;
-use crate::state::soundpack::{SoundPack, SoundpackType};
-use crate::state::soundpack::{SoundpackCache, SoundpackMetadata};
 
 use super::audio_context::AudioContext;
 
@@ -36,7 +37,6 @@ pub fn load_keyboard_soundpack_with_cache_control(
     match load_keyboard_soundpack_optimized(context, soundpack_id, update_cache_on_error) {
         Ok(()) => Ok(()),
         Err(e) => {
-            // Capture the error in cache
             capture_soundpack_loading_error(soundpack_id, SoundpackType::Keyboard, &e);
             Err(e)
         }
@@ -60,7 +60,6 @@ pub fn load_mouse_soundpack_with_cache_control(
     match load_mouse_soundpack_optimized(context, soundpack_id, update_cache_on_error) {
         Ok(()) => Ok(()),
         Err(e) => {
-            // Capture the error in cache only if requested
             if update_cache_on_error {
                 capture_soundpack_loading_error(soundpack_id, SoundpackType::Mouse, &e);
             }
@@ -423,7 +422,7 @@ pub fn load_keyboard_soundpack_optimized(
     update_keyboard_context(context, samples, key_mappings, &soundpack)?;
 
     // Update metadata cache - create metadata with no error since loading succeeded
-    let mut cache = SoundpackCache::load();
+    let mut cache = load_cache();
     match create_soundpack_metadata(&soundpack_dir, &soundpack) {
         Ok(metadata) => {
             cache.add_soundpack(metadata);
@@ -465,7 +464,7 @@ pub fn load_keyboard_soundpack_optimized(
             }
         }
     }
-    cache.save();
+    save_cache(&cache);
 
     log::info!(
         "✅ Successfully loaded keyboard soundpack: {} (direct from files)",
@@ -502,7 +501,7 @@ pub fn load_mouse_soundpack_optimized(
     update_mouse_context(context, samples, mouse_mappings, &soundpack)?;
 
     // Update metadata cache - create metadata with no error since loading succeeded
-    let mut cache = SoundpackCache::load();
+    let mut cache = load_cache();
     match create_soundpack_metadata(&soundpack_dir, &soundpack) {
         Ok(metadata) => {
             cache.add_soundpack(metadata);
@@ -544,7 +543,7 @@ pub fn load_mouse_soundpack_optimized(
             }
         }
     }
-    cache.save();
+    save_cache(&cache);
 
     log::info!(
         "✅ Successfully loaded mouse soundpack: {} (direct from files)",
@@ -762,7 +761,7 @@ fn create_key_mappings(
 ) -> std::collections::HashMap<String, Vec<(f64, f64)>> {
     let mut key_mappings = std::collections::HashMap::new(); // For keyboard soundpacks, use the definitions field for keyboard mappings
     // For mouse soundpacks, return empty key mappings
-    if soundpack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard {
+    if soundpack.soundpack_type == SoundpackType::Keyboard {
         for (key, key_def) in &soundpack.definitions {
             // Convert KeyDefinition timing to Vec<(f64, f64)>
             let converted_mappings: Vec<(f64, f64)> = key_def
@@ -782,7 +781,7 @@ fn create_mouse_mappings(
     _samples: &[f32],
 ) -> std::collections::HashMap<String, Vec<(f64, f64)>> {
     let mut mouse_mappings = std::collections::HashMap::new(); // For mouse soundpacks, use the definitions field directly
-    if soundpack.soundpack_type == crate::state::soundpack::SoundpackType::Mouse {
+    if soundpack.soundpack_type == SoundpackType::Mouse {
         // This is a mouse soundpack, use definitions field for mouse mappings
         for (button, key_def) in &soundpack.definitions {
             // Convert KeyDefinition timing to Vec<(f64, f64)>
@@ -825,57 +824,4 @@ fn create_mouse_mappings(
     }
 
     mouse_mappings
-}
-
-/// Capture soundpack loading error and update the cache
-fn capture_soundpack_loading_error(soundpack_id: &str, soundpack_type: SoundpackType, error: &str) {
-    // Skip creating cache entries for empty soundpack IDs
-    if soundpack_id.is_empty() {
-        log::error!("⚠️Skipping cache entry for empty soundpack ID: {}", error);
-        return;
-    }
-
-    log::info!("📝 Capturing loading error for {}: {}", soundpack_id, error);
-
-    let mut cache = SoundpackCache::load();
-
-    // Check if we already have metadata for this soundpack
-    if let Some(existing_metadata) = cache.soundpacks.get_mut(soundpack_id) {
-        // Update existing metadata with error
-        existing_metadata.last_error = Some(error.to_string());
-        existing_metadata.validation_status = "loading_error".to_string();
-    } else {
-        // Create minimal metadata entry with error information
-        let error_metadata = SoundpackMetadata {
-            id: soundpack_id.to_string(),
-            name: format!("Error: {}", soundpack_id),
-            author: None,
-            description: Some(format!("Loading failed: {}", error)),
-            version: "unknown".to_string(),
-            tags: vec!["error".to_string()],
-            icon: None,
-            soundpack_type: soundpack_type,
-            folder_path: soundpack_id.to_string(), // Add folder_path for error entries
-            last_modified: 0,
-            last_accessed: std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-            config_version: None,
-            is_valid_v2: false,
-            validation_status: "loading_error".to_string(),
-            can_be_converted: false,
-            last_error: Some(error.to_string()),
-        };
-
-        cache
-            .soundpacks
-            .insert(soundpack_id.to_string(), error_metadata);
-    }
-
-    cache.save();
-    log::info!(
-        "💾 Updated cache with error information for {}",
-        soundpack_id
-    );
 }

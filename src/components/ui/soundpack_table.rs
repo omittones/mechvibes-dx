@@ -1,6 +1,7 @@
+use crate::libs::soundpack::cache::SoundpackMetadata;
+use crate::libs::soundpack::format::SoundpackType;
 use crate::state::app::use_state_trigger;
 use crate::state::paths;
-use crate::state::soundpack::{SoundpackMetadata, SoundpackType};
 use crate::utils::path::{directory_exists, open_path};
 use dioxus::document::eval;
 use dioxus::prelude::*;

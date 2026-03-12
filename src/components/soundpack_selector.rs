@@ -1,20 +1,15 @@
 use crate::libs::audio::AudioContext;
+use crate::libs::soundpack::format::SoundpackType;
 use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use futures_timer::Delay;
-use lucide_dioxus::{ Check, ChevronDown, Keyboard, Mouse, Music, Search };
+use lucide_dioxus::{Check, ChevronDown, Keyboard, Mouse, Music, Search};
 use std::sync::Arc;
 use std::time::Duration;
 
-#[derive(Clone, PartialEq, Copy, Debug)]
-pub enum SelectorType {
-    Keyboard,
-    Mouse,
-}
-
 #[derive(Props, Clone, PartialEq)]
 pub struct SoundpackSelectorProps {
-    pub soundpack_type: SelectorType,
+    pub soundpack_type: SoundpackType,
     pub icon: Element,
     pub label: String,
 }
@@ -33,7 +28,7 @@ pub fn SoundpackSelector(props: SoundpackSelectorProps) -> Element {
 }
 
 #[component]
-fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
+fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
     // Use audio context from the layout provider
     let audio_ctx: Arc<AudioContext> = use_context();
 
@@ -55,8 +50,8 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
     let current = use_memo(move || {
         let config = config();
         match soundpack_type {
-            SelectorType::Keyboard => config.keyboard_soundpack.clone(),
-            SelectorType::Mouse => config.mouse_soundpack.clone(),
+            SoundpackType::Keyboard => config.keyboard_soundpack.clone(),
+            SoundpackType::Mouse => config.mouse_soundpack.clone(),
         }
     }); // Filter soundpacks based on search query and type, then sort by last_modified
     let filtered_soundpacks = use_memo(move || {
@@ -64,14 +59,7 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
         let all_packs = soundpacks(); // Filter by type first
         let type_filtered_packs: Vec<_> = all_packs
             .into_iter()
-            .filter(|pack| {
-                match soundpack_type {
-                    SelectorType::Keyboard =>
-                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard,
-                    SelectorType::Mouse =>
-                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Mouse,
-                }
-            })
+            .filter(|pack| pack.soundpack_type == soundpack_type)
             .collect();
 
         // Then filter by search query
@@ -81,9 +69,12 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
             type_filtered_packs
                 .into_iter()
                 .filter(|pack| {
-                    pack.name.to_lowercase().contains(&query) ||
-                        pack.id.to_lowercase().contains(&query) ||
-                        pack.tags.iter().any(|tag| tag.to_lowercase().contains(&query))
+                    pack.name.to_lowercase().contains(&query)
+                        || pack.id.to_lowercase().contains(&query)
+                        || pack
+                            .tags
+                            .iter()
+                            .any(|tag| tag.to_lowercase().contains(&query))
                 })
                 .collect()
         }; // Sort by last_modified in descending order (most recent first)
@@ -92,42 +83,33 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
         filtered_packs
     });
     let current_soundpack = use_memo(
-        move ||
+        move || {
             soundpacks()
                 .into_iter()
-                .find(|pack| pack.folder_path == current()) // Use folder_path for comparison
+                .find(|pack| pack.folder_path == current())
+        }, // Use folder_path for comparison
     ); // Get appropriate placeholder and search text based on type
-    let (placeholder_text, search_placeholder, not_found_text, no_soundpack_text) = match
-        soundpack_type
-    {
-        SelectorType::Keyboard =>
-            (
+    let (placeholder_text, search_placeholder, not_found_text, no_soundpack_text) =
+        match soundpack_type {
+            SoundpackType::Keyboard => (
                 "Select a keyboard sound pack...",
                 "Search keyboard sound packs...",
                 "No keyboard sound packs found",
                 "No sound packs available",
             ),
-        SelectorType::Mouse =>
-            (
+            SoundpackType::Mouse => (
                 "Select a mouse sound pack...",
                 "Search mouse sound packs...",
                 "No mouse sound packs found",
                 "No sound packs available",
             ),
-    };
+        };
 
     // Check if there are any soundpacks available for this type
     let has_soundpacks = use_memo(move || {
         soundpacks()
             .into_iter()
-            .any(|pack| {
-                match soundpack_type {
-                    SelectorType::Keyboard =>
-                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard,
-                    SelectorType::Mouse =>
-                        pack.soundpack_type == crate::state::soundpack::SoundpackType::Mouse,
-                }
-            })
+            .any(|pack| pack.soundpack_type == soundpack_type)
     });
 
     rsx! {
@@ -250,10 +232,10 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                                   update_config(
                                       Box::new(move |config| {
                                           match soundpack_type_clone {
-                                              SelectorType::Keyboard => {
+                                              SoundpackType::Keyboard => {
                                                   config.keyboard_soundpack = pack_id_clone;
                                               }
-                                              SelectorType::Mouse => {
+                                              SoundpackType::Mouse => {
                                                   config.mouse_soundpack = pack_id_clone;
                                               }
                                           }
@@ -268,13 +250,13 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                                       is_loading_async.set(true);
                                       Delay::new(Duration::from_millis(1)).await;
                                       let result = match soundpack_type_async {
-                                          SelectorType::Keyboard => {
+                                          SoundpackType::Keyboard => {
                                               crate::libs::audio::load_keyboard_soundpack(
                                                   &audio_ctx_async,
                                                   &pack_id_async,
                                               )
                                           }
-                                          SelectorType::Mouse => {
+                                          SoundpackType::Mouse => {
                                               crate::libs::audio::load_mouse_soundpack(
                                                   &audio_ctx_async,
                                                   &pack_id_async,
@@ -285,8 +267,8 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
                                           Ok(_) => {}
                                           Err(e) => {
                                               let type_str = match soundpack_type_async {
-                                                  SelectorType::Keyboard => "keyboard",
-                                                  SelectorType::Mouse => "mouse",
+                                                  SoundpackType::Keyboard => "keyboard",
+                                                  SoundpackType::Mouse => "mouse",
                                               };
                                               error_async
                                                   .set(
@@ -365,7 +347,7 @@ fn SoundpackDropdown(soundpack_type: SelectorType) -> Element {
 pub fn KeyboardSoundpackSelector() -> Element {
     rsx! {
         SoundpackSelector {
-            soundpack_type: SelectorType::Keyboard,
+            soundpack_type: SoundpackType::Keyboard,
             label: "Keyboard".to_string(),
             icon: rsx! {
                 Keyboard { class: "w-4 h-4" }
@@ -378,7 +360,7 @@ pub fn KeyboardSoundpackSelector() -> Element {
 pub fn MouseSoundpackSelector() -> Element {
     rsx! {
         SoundpackSelector {
-            soundpack_type: SelectorType::Mouse,
+            soundpack_type: SoundpackType::Mouse,
             label: "Mouse".to_string(),
             icon: rsx! {
                 Mouse { class: "w-4 h-4" }

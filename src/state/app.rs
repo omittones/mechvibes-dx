@@ -1,5 +1,7 @@
 // Event-driven App State Manager
-use crate::state::soundpack::SoundpackCache;
+use crate::libs::soundpack::cache::{
+    SoundpackCache, SoundpackMetadata, load_cache, refresh_cache, save_cache,
+};
 use dioxus::prelude::*;
 use once_cell::sync::OnceCell;
 use std::sync::{Arc, Mutex};
@@ -22,7 +24,7 @@ impl AppState {
     pub fn new() -> Self {
         log::debug!("🌍 Initializing global AppState...");
         Self {
-            soundpack_cache: Arc::new(SoundpackCache::load()),
+            soundpack_cache: Arc::new(load_cache()),
             last_updated: std::time::Instant::now(),
         }
     }
@@ -39,15 +41,15 @@ impl AppState {
         self.soundpack_cache.last_scan
     }
 
-    pub fn get_soundpacks(&self) -> Vec<crate::state::soundpack::SoundpackMetadata> {
+    pub fn get_soundpacks(&self) -> Vec<SoundpackMetadata> {
         self.soundpack_cache.soundpacks.values().cloned().collect()
     }
 
     pub fn refresh_cache(&mut self) {
         log::debug!("🔄 Refreshing soundpack cache...");
-        let mut fresh_cache = SoundpackCache::load();
-        fresh_cache.refresh_from_directory();
-        fresh_cache.save();
+        let mut fresh_cache = load_cache();
+        refresh_cache(&mut fresh_cache);
+        save_cache(&fresh_cache);
         self.soundpack_cache = Arc::new(fresh_cache);
         self.last_updated = std::time::Instant::now();
     }
