@@ -1,4 +1,4 @@
-use crate::state::app::use_app_state;
+use crate::{libs::audio::load_soundpack, state::app::use_app_state};
 use dioxus::prelude::*;
 use lucide_dioxus::{ExternalLink, FolderOpen, RefreshCcw};
 use std::sync::Arc;
@@ -45,7 +45,7 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
 
                 // Reload current soundpacks to apply any changes
                 log::debug!("🔄 Reloading current soundpacks...");
-                crate::state::app::reload_current_soundpacks(&audio_ctx_clone);
+                let _ = load_soundpack(&audio_ctx_clone, true);
 
                 // Add another small delay before changing the loading state back
                 Delay::new(Duration::from_millis(100)).await;

@@ -1,7 +1,8 @@
 //! Soundpack installation from ZIP archives.
 
 use crate::libs::soundpack::cache::SoundpackMetadata;
-use crate::libs::soundpack::format::SoundpackType;
+use crate::libs::soundpack::cache::SoundpackRef;
+use crate::libs::soundpack::cache::SoundpackType;
 use crate::libs::soundpack::validator::{SoundpackValidationStatus, validate_soundpack_config};
 use crate::state::paths::soundpacks::get_custom_soundpacks_dir;
 use crate::utils::config_converter;
@@ -20,22 +21,12 @@ pub struct SoundpackInfo {
 
 /// Check if a soundpack ID already exists in the app state.
 /// Supports both full IDs (custom/keyboard/name) and folder names for conflict detection.
-pub fn check_soundpack_id_conflict(id: &str, soundpacks: &[SoundpackMetadata]) -> bool {
-    use crate::libs::soundpack::id::SoundpackId;
-
-    if SoundpackId::is_new_format(id) {
-        return soundpacks.iter().any(|pack| pack.id == id);
-    }
-    // Legacy: check if custom/keyboard/{id} or custom/mouse/{id} exists
-    soundpacks.iter().any(|pack| {
-        pack.id == id
-            || pack.id == format!("custom/keyboard/{}", id)
-            || pack.id == format!("custom/mouse/{}", id)
-    })
+pub fn check_soundpack_id_conflict(id: &SoundpackRef, soundpacks: &[SoundpackMetadata]) -> bool {
+    soundpacks.iter().any(|pack| pack.id.eq(id))
 }
 
 /// Extract soundpack ID from ZIP without extracting files
-pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<String, String> {
+pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<SoundpackRef, String> {
     let file = File::open(file_path).map_err(|e| format!("Failed to open ZIP file: {}", e))?;
     let mut archive =
         ZipArchive::new(file).map_err(|e| format!("Failed to read ZIP archive: {}", e))?;
@@ -56,11 +47,19 @@ pub fn get_soundpack_id_from_zip(file_path: &str) -> Result<String, String> {
 
             if let Some(id) = config.get("id").and_then(|v| v.as_str()) {
                 if !id.trim().is_empty() {
-                    return Ok(id.to_string());
+                    return Ok(SoundpackRef {
+                        id: id.to_string(),
+                        is_builtin: false,
+                        soundpack_type: SoundpackType::Keyboard,
+                    });
                 }
             }
 
-            return Ok(format!("imported-{}", Uuid::new_v4()));
+            return Ok(SoundpackRef {
+                id: format!("imported-{}", Uuid::new_v4()),
+                is_builtin: false,
+                soundpack_type: SoundpackType::Keyboard,
+            });
         }
     }
 

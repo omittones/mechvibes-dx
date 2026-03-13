@@ -1,6 +1,6 @@
 // Event-driven App State Manager
 use crate::libs::soundpack::cache::{
-    SoundpackCache, SoundpackMetadata, load_cache, refresh_cache, save_cache,
+    SoundpackCache, SoundpackMetadata, load_cache, load_soundpacks_into_cache, save_cache,
 };
 use dioxus::prelude::*;
 use once_cell::sync::OnceCell;
@@ -48,7 +48,7 @@ impl AppState {
     pub fn refresh_cache(&mut self) {
         log::debug!("🔄 Refreshing soundpack cache...");
         let mut fresh_cache = load_cache();
-        refresh_cache(&mut fresh_cache);
+        load_soundpacks_into_cache(&mut fresh_cache);
         save_cache(&fresh_cache);
         self.soundpack_cache = Arc::new(fresh_cache);
         self.last_updated = std::time::Instant::now();
@@ -97,59 +97,7 @@ pub fn use_state_trigger() -> Callback<()> {
     })
 }
 
-// Reload the current soundpacks from configuration
-pub fn reload_current_soundpacks(audio_ctx: &crate::libs::audio::AudioContext) {
-    let mut config = crate::state::config::AppConfig::load();
-    let mut config_changed = false;
 
-    // Load keyboard soundpack
-    match crate::libs::audio::soundpack_loader::load_keyboard_soundpack_with_cache_control(
-        audio_ctx,
-        &config.keyboard_soundpack,
-        false,
-    ) {
-        Ok(_) => log::debug!(
-            "✅ Keyboard soundpack '{}' reloaded successfully",
-            config.keyboard_soundpack
-        ),
-        Err(e) => {
-            log::error!(
-                "❌ Failed to reload keyboard soundpack '{}': {}. Clearing selection.",
-                config.keyboard_soundpack,
-                e
-            );
-            config.keyboard_soundpack = "".to_string();
-            config_changed = true;
-        }
-    }
-
-    // Load mouse soundpack
-    match crate::libs::audio::soundpack_loader::load_mouse_soundpack_with_cache_control(
-        audio_ctx,
-        &config.mouse_soundpack,
-        false,
-    ) {
-        Ok(_) => log::debug!(
-            "✅ Mouse soundpack '{}' reloaded successfully",
-            config.mouse_soundpack
-        ),
-        Err(e) => {
-            log::error!(
-                "❌ Failed to reload mouse soundpack '{}': {}. Clearing selection.",
-                config.mouse_soundpack,
-                e
-            );
-            config.mouse_soundpack = "".to_string();
-            config_changed = true;
-        }
-    }
-
-    // Save config if any changes were made
-    if config_changed {
-        let _ = config.save();
-        log::debug!("💾 Config updated due to failed soundpack loads");
-    }
-}
 
 // Initialize the app state - call this once at startup
 pub fn init_app_state() {

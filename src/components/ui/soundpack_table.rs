@@ -1,8 +1,8 @@
+use crate::libs::audio::load_soundpack;
 use crate::libs::soundpack::cache::SoundpackMetadata;
-use crate::libs::soundpack::format::SoundpackType;
+use crate::libs::soundpack::cache::SoundpackRef;
 use crate::state::app::use_state_trigger;
-use crate::state::paths;
-use crate::utils::path::{directory_exists, open_path};
+use crate::utils::path::open_path;
 use dioxus::document::eval;
 use dioxus::prelude::*;
 use lucide_dioxus::{FolderOpen, Music, Plus, RefreshCw, Trash};
@@ -12,10 +12,13 @@ use super::ConfirmDeleteModal;
 
 /// Open a soundpack folder in the system file manager
 /// Opens the specific soundpack folder
-fn open_soundpack_folder(soundpack_id: &str, is_mouse: bool) -> Result<(), String> {
+fn open_soundpack_folder(soundpack_id: &SoundpackRef) -> Result<(), String> {
     use std::path::PathBuf;
 
-    let soundpack_path = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
+    let soundpack_path = soundpack_id
+        .to_soundpack_path()
+        .to_string_lossy()
+        .to_string();
 
     // Normalize path separators for Windows
     let normalized_path = PathBuf::from(&soundpack_path);
@@ -38,19 +41,22 @@ fn open_soundpack_folder(soundpack_id: &str, is_mouse: bool) -> Result<(), Strin
 }
 
 /// Delete a soundpack directory and all its contents
-fn delete_soundpack(soundpack_id: &str, is_mouse: bool) -> Result<(), String> {
-    let soundpack_path = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
+fn delete_soundpack(id: &SoundpackRef) -> Result<(), String> {
+    let soundpack_path = id.to_soundpack_path();
 
     // Check if the directory exists
-    if !directory_exists(&soundpack_path) {
-        return Err(format!("Soundpack directory not found: {}", soundpack_path));
+    if !soundpack_path.exists() {
+        return Err(format!(
+            "Soundpack directory not found: {}",
+            soundpack_path.display()
+        ));
     }
 
     // Remove the entire directory
     std::fs::remove_dir_all(&soundpack_path)
         .map_err(|e| format!("Failed to delete soundpack directory: {}", e))?;
 
-    log::info!("🗑️ Successfully deleted soundpack: {}", soundpack_id);
+    log::info!("🗑️ Successfully deleted soundpack: {}", id);
     Ok(())
 }
 
@@ -77,7 +83,7 @@ pub fn SoundpackTable(
             .iter()
             .filter(|pack| {
                 pack.name.to_lowercase().contains(&query)
-                    || pack.id.to_lowercase().contains(&query)
+                    || pack.id.id.contains(&query)
                     || pack
                         .author
                         .as_ref()
@@ -112,7 +118,7 @@ pub fn SoundpackTable(
                 log::debug!("🔄 Refreshing soundpack cache...");
 
                 // Reload soundpacks in audio context
-                crate::state::app::reload_current_soundpacks(&audio_ctx);
+                let _ = load_soundpack(&audio_ctx, true);
 
                 // Trigger state update to refresh UI
                 state_trigger.call(());
@@ -184,75 +190,57 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
     let state_trigger = use_state_trigger();
 
     // Handlers for button clicks
-    let on_open_folder = {
-        let folder_path = soundpack.config_path.clone();
-        let soundpack_id = soundpack.id.clone();
-        let soundpack_name = soundpack.name.clone();
-        move |_| {
-            let folder_path = folder_path.clone();
-            let soundpack_id = soundpack_id.clone();
-            let soundpack_name = soundpack_name.clone();
-            spawn(async move {
-                log::debug!("🔍 Soundpack info:");
-                log::info!("Name: {}", soundpack_name);
-                log::info!("ID: {}", soundpack_id);
-                log::info!("Folder path: {}", folder_path);
 
-                // Use folder_path if not empty, otherwise fall back to id
-                let path_to_use = if !folder_path.is_empty() {
-                    folder_path
-                } else {
-                    soundpack_id.clone()
-                };
+    let soundpack_name = soundpack.name.clone();
+    let soundpack_config_path = soundpack.config_path.clone();
+    let soundpack_id = soundpack.id.clone();
+    let on_open_folder_click = move |_| {
+        let soundpack_name = soundpack_name.clone();
+        let soundpack_config_path = soundpack_config_path.clone();
+        let soundpack_id = soundpack_id.clone();
 
-                match open_soundpack_folder(
-                    &path_to_use,
-                    soundpack.soundpack_type == SoundpackType::Mouse,
-                ) {
-                    Ok(_) => log::info!(
-                        "✅ Successfully opened folder for soundpack: {}",
-                        soundpack_name
-                    ),
-                    Err(e) => log::error!(
-                        "❌ Failed to open folder for soundpack {}: {}",
-                        soundpack_name,
-                        e
-                    ),
-                }
-            });
-        }
+        spawn(async move {
+            log::debug!("🔍 Soundpack info:");
+            log::info!("ID: {}", soundpack_id);
+            log::info!("Name: {}", soundpack_name);
+            log::info!("Folder path: {}", soundpack_config_path);
+
+            match open_soundpack_folder(&soundpack_id) {
+                Ok(_) => log::info!(
+                    "✅ Successfully opened folder for soundpack: {}",
+                    soundpack_name
+                ),
+                Err(e) => log::error!(
+                    "❌ Failed to open folder for soundpack {}: {}",
+                    soundpack_name,
+                    e
+                ),
+            }
+        });
     };
 
     // Handler for delete button click
-    let on_confirm_delete = {
-        let path_to_use = if !soundpack.config_path.is_empty() {
-            soundpack.config_path.clone()
-        } else {
-            soundpack.id.clone()
-        };
-        let trigger = state_trigger.clone();
-        move |_| {
-            let path_to_use = path_to_use.clone();
-            let trigger = trigger.clone();
-            spawn(async move {
-                match delete_soundpack(
-                    &path_to_use,
-                    soundpack.soundpack_type == SoundpackType::Mouse,
-                ) {
-                    Ok(_) => {
-                        log::info!("✅ Successfully deleted soundpack: {}", path_to_use);
-                        // The modal will close automatically due to form method="dialog"
-                        // Trigger state refresh to update the UI
-                        trigger.call(());
-                    }
-                    Err(e) => {
-                        log::error!("❌ Failed to delete soundpack {}: {}", path_to_use, e);
-                        // Could show an error modal here if needed
-                    }
+    let soundpack_id = soundpack.id.clone();
+    let trigger = state_trigger.clone();
+    let on_confirm_delete = move || {
+        let soundpack_id = soundpack_id.clone();
+        let trigger = trigger.clone();
+        spawn(async move {
+            match delete_soundpack(&soundpack_id) {
+                Ok(_) => {
+                    log::info!("✅ Successfully deleted soundpack: {}", soundpack_id);
+                    // The modal will close automatically due to form method="dialog"
+                    // Trigger state refresh to update the UI
+                    trigger.call(());
                 }
-            });
-        }
+                Err(e) => {
+                    log::error!("❌ Failed to delete soundpack {}: {}", soundpack_id, e);
+                    // Could show an error modal here if needed
+                }
+            }
+        });
     };
+
     rsx! {
       tr { class: "hover:bg-base-100",
         td { class: "flex items-center gap-4",
@@ -294,7 +282,7 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
             button {
               class: "btn btn-soft btn-xs",
               title: "Open soundpack folder",
-              onclick: on_open_folder,
+              onclick: on_open_folder_click,
               FolderOpen { class: "w-4 h-4" }
             }
             button {

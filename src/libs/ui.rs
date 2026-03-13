@@ -1,6 +1,7 @@
 use crate::components::header::Header;
 use crate::components::window_controller::WindowController;
 use crate::libs::AudioContext;
+use crate::libs::audio::load_soundpack;
 use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
 use crate::libs::tray_service::request_tray_update;
@@ -46,7 +47,7 @@ pub fn app() -> Element {
         let ctx = audio_context.clone();
         use_effect(move || {
             log::debug!("🎵 Loading current soundpacks on startup...");
-            crate::state::app::reload_current_soundpacks(&ctx);
+            let _ = load_soundpack(&ctx, true);
         });
     }
 
@@ -206,21 +207,22 @@ pub fn app() -> Element {
 
         let path_parts: Vec<&str> = request_path.trim_start_matches('/').split('/').collect();
 
-        let (soundpack_id, filename, is_mouse) = if path_parts.len() >= 5 && path_parts[0] == "soundpack-images" {
-            // New format: soundpack-images/{source}/{type}/{folder}/{filename}
-            let soundpack_id = format!("{}/{}/{}", path_parts[1], path_parts[2], path_parts[3]);
-            let filename = path_parts[4];
-            let is_mouse = path_parts[2] == "mouse";
-            (soundpack_id, filename.to_string(), is_mouse)
-        } else if path_parts.len() >= 4 && path_parts[0] == "soundpack-images" {
-            // Legacy: soundpack-images/{type}/{folder}/{filename}
-            let soundpack_id = path_parts[2].to_string();
-            let filename = path_parts[3].to_string();
-            let is_mouse = path_parts[1] == "mouse";
-            (soundpack_id, filename, is_mouse)
-        } else {
-            (String::new(), String::new(), false)
-        };
+        let (soundpack_id, filename, is_mouse) =
+            if path_parts.len() >= 5 && path_parts[0] == "soundpack-images" {
+                // New format: soundpack-images/{source}/{type}/{folder}/{filename}
+                let soundpack_id = format!("{}/{}/{}", path_parts[1], path_parts[2], path_parts[3]);
+                let filename = path_parts[4];
+                let is_mouse = path_parts[2] == "mouse";
+                (soundpack_id, filename.to_string(), is_mouse)
+            } else if path_parts.len() >= 4 && path_parts[0] == "soundpack-images" {
+                // Legacy: soundpack-images/{type}/{folder}/{filename}
+                let soundpack_id = path_parts[2].to_string();
+                let filename = path_parts[3].to_string();
+                let is_mouse = path_parts[1] == "mouse";
+                (soundpack_id, filename, is_mouse)
+            } else {
+                (String::new(), String::new(), false)
+            };
 
         if !soundpack_id.is_empty() && !filename.is_empty() {
             // Security: Validate path segments to prevent directory traversal
@@ -235,8 +237,7 @@ pub fn app() -> Element {
                 return;
             }
 
-            let soundpack_dir =
-                paths::soundpacks::find_soundpack_dir(&soundpack_id, is_mouse);
+            let soundpack_dir = paths::soundpacks::find_soundpack_dir(&soundpack_id, is_mouse);
             let image_path = std::path::PathBuf::from(&soundpack_dir).join(filename);
 
             if image_path.exists() {

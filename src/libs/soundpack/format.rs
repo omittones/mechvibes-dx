@@ -1,22 +1,14 @@
+use crate::utils::config_converter::{convert_v1_to_v2, convert_v2_multi_to_single};
+
+use super::validator::{SoundpackValidationStatus, validate_soundpack_config};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, fs, path::PathBuf};
 
 // ===== SOUNDPACK TYPES =====
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum SoundpackType {
-    Keyboard,
-    Mouse,
-}
 
 // Default function for config_version field
 fn default_config_version() -> u32 {
     2
-}
-
-// Default function for soundpack_type field
-fn default_soundpack_type() -> SoundpackType {
-    SoundpackType::Keyboard
 }
 
 // Default function for options field
@@ -79,11 +71,118 @@ pub struct SoundPack {
     pub definition_method: String, // "single" or "multi"
     #[serde(default)]
     pub options: SoundpackOptions,
-    #[serde(default = "default_soundpack_type")]
-    pub soundpack_type: SoundpackType, // Type of soundpack (Keyboard or Mouse) - for internal use
-    #[serde(default = "default_config_version")]
-    pub config_version_num: u32, // Internal config version number
     pub definitions: HashMap<String, KeyDefinition>,
+}
+
+impl SoundPack {
+    /// Validate that the audio file referenced in the config exists on disk.
+    /// For "single" method, checks the top-level audio_file. For "multi", checks each definition's audio_file.
+    /// Logs warnings or errors for missing files or missing audio_file field.
+    pub fn validate_audio_file(&self, soundpack_path: &str) -> Result<(), String> {
+        log::debug!("🔍 audio_file in config: {:?}", self.audio_file);
+
+        let audio_files: Vec<&str> = if self.definition_method == "single" {
+            self.audio_file
+                .as_deref()
+                .map(|s| vec![s])
+                .unwrap_or_default()
+        } else {
+            self.definitions
+                .values()
+                .filter_map(|d| d.audio_file.as_deref())
+                .collect()
+        };
+
+        if audio_files.is_empty() {
+            return Err("No audio_file field found in config".into());
+        }
+
+        for audio_filename in audio_files {
+            Self::validate_audio_path(soundpack_path, audio_filename)?;
+        }
+
+        Ok(())
+    }
+
+    fn validate_audio_path(soundpack_path: &str, audio_filename: &str) -> Result<(), String> {
+        let full_audio_path = format!(
+            "{}/{}",
+            soundpack_path,
+            audio_filename.trim_start_matches("./")
+        );
+        log::debug!("🔍 soundpack_path: {}", soundpack_path);
+        log::debug!("🔍 full_audio_path: {}", full_audio_path);
+        log::info!(
+            "🔍 audio file exists: {}",
+            std::path::Path::new(&full_audio_path).exists()
+        );
+
+        if !std::path::Path::new(&full_audio_path).exists() {
+            return Err(format!(
+                "Audio file not found during cache refresh: {}",
+                full_audio_path
+            ));
+        }
+
+        Ok(())
+    }
+}
+
+/// Load and migrate a soundpack config from disk.
+/// Validates the config, runs V1→V2 and multi→single migrations if needed,
+/// and returns the config path and parsed config JSON.
+pub fn load_and_migrate_soundpack(soundpack_path: &str) -> Result<(String, SoundPack), String> {
+    let config_path = PathBuf::from(soundpack_path)
+        .join("config.json")
+        .to_string_lossy()
+        .to_string();
+
+    let validation_result = validate_soundpack_config(&config_path);
+    if validation_result.status == SoundpackValidationStatus::VersionOneNeedsConversion
+        && validation_result.can_be_converted
+    {
+        let backup_path = format!("{}.v1.backup", config_path);
+        let _ = fs::copy(&config_path, &backup_path);
+        match convert_v1_to_v2(&config_path, &config_path, None) {
+            Ok(()) => {}
+            Err(e) => {
+                let error_msg =
+                    format!("Failed to convert {} from V1 to V2: {}", soundpack_path, e);
+                if fs::copy(&backup_path, &config_path).is_ok() {}
+                return Err(error_msg);
+            }
+        }
+    }
+
+    let content =
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read config: {}", e))?;
+
+    let mut config: serde_json::Value =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
+
+    if let Some(definition_method) = config.get("definition_method").and_then(|v| v.as_str()) {
+        if definition_method == "multi" {
+            log::debug!("🔄 Found V2 multi method config, converting to single method");
+            if let Err(e) = convert_v2_multi_to_single(&config_path, &soundpack_path) {
+                log::error!("❌ Failed to convert multi to single: {}", e);
+                return Err(format!("Failed to convert multi to single method: {}", e));
+            }
+
+            let new_content = fs::read_to_string(&config_path)
+                .map_err(|e| format!("Failed to re-read converted config: {}", e))?;
+            config = serde_json::from_str(&new_content)
+                .map_err(|e| format!("Failed to parse converted config: {}", e))?;
+
+            log::info!("✅ Successfully converted to single method");
+        }
+    }
+
+    let soundpack = serde_json::from_value::<SoundPack>(config)
+        .map_err(|e| format!("Failed to parse config: {}", e))?;
+
+    soundpack.validate_audio_file(soundpack_path)?;
+
+    Ok((config_path, soundpack))
 }
 
 #[cfg(test)]

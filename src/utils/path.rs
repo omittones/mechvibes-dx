@@ -53,11 +53,6 @@ pub fn open_path(path_to_open: &str) -> Result<(), String> {
     }
 }
 
-/// Check if a directory exists
-pub fn directory_exists(path: &str) -> bool {
-    std::path::Path::new(path).exists()
-}
-
 /// Create directory recursively if it doesn't exist
 pub fn ensure_directory_exists(path: impl AsRef<std::path::Path>) -> Result<(), String> {
     let path_ref = path.as_ref();

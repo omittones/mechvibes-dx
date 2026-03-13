@@ -1,8 +1,8 @@
-use crate::libs::device_manager::{ DeviceInfo, DeviceManager };
-use crate::libs::input_device_manager::{ InputDeviceInfo, InputDeviceManager };
+use crate::libs::device_manager::{DeviceInfo, DeviceManager};
+use crate::libs::input_device_manager::{InputDeviceInfo, InputDeviceManager};
 use crate::utils::config::use_config;
 use dioxus::prelude::*;
-use lucide_dioxus::{ Headphones, Keyboard, Mouse, RefreshCw };
+use lucide_dioxus::{Headphones, Keyboard, Mouse, RefreshCw};
 
 #[derive(Clone, PartialEq, Copy)]
 pub enum DeviceType {
@@ -131,39 +131,33 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                     test_device_status.call(device_id.clone());
 
                     let device_id_clone = device_id.clone();
-                    update_config(
-                        Box::new(move |config| {
-                            config.selected_audio_device = if device_id_clone == "default" {
-                                None
-                            } else {
-                                Some(device_id_clone)
-                            };
-                        })
-                    );
+                    update_config(Box::new(move |config| {
+                        config.selected_audio_device = if device_id_clone == "default" {
+                            None
+                        } else {
+                            Some(device_id_clone)
+                        };
+                    }));
                 }
                 DeviceType::Keyboard => {
                     let device_id_clone = device_id.clone();
-                    update_config(
-                        Box::new(move |config| {
-                            if config.enabled_keyboards.contains(&device_id_clone) {
-                                config.enabled_keyboards.retain(|id| id != &device_id_clone);
-                            } else {
-                                config.enabled_keyboards.push(device_id_clone);
-                            }
-                        })
-                    );
+                    update_config(Box::new(move |config| {
+                        if config.enabled_keyboards.contains(&device_id_clone) {
+                            config.enabled_keyboards.retain(|id| id != &device_id_clone);
+                        } else {
+                            config.enabled_keyboards.push(device_id_clone);
+                        }
+                    }));
                 }
                 DeviceType::Mouse => {
                     let device_id_clone = device_id.clone();
-                    update_config(
-                        Box::new(move |config| {
-                            if config.enabled_mice.contains(&device_id_clone) {
-                                config.enabled_mice.retain(|id| id != &device_id_clone);
-                            } else {
-                                config.enabled_mice.push(device_id_clone);
-                            }
-                        })
-                    );
+                    update_config(Box::new(move |config| {
+                        if config.enabled_mice.contains(&device_id_clone) {
+                            config.enabled_mice.retain(|id| id != &device_id_clone);
+                        } else {
+                            config.enabled_mice.push(device_id_clone);
+                        }
+                    }));
                 }
             }
         })
@@ -189,21 +183,34 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
             DeviceType::Keyboard | DeviceType::Mouse => {
                 let device_count = enabled_devices.len();
                 if device_count == 0 {
-                    format!("All {}s", match props.device_type {
-                        DeviceType::Keyboard => "Keyboard",
-                        DeviceType::Mouse => "Mouse",
-                        _ => "Device",
-                    })
-                } else {
-                    format!("{} {} Selected", device_count, match props.device_type {
-                        DeviceType::Keyboard => if device_count == 1 {
-                            "Keyboard"
-                        } else {
-                            "Keyboards"
+                    format!(
+                        "All {}s",
+                        match props.device_type {
+                            DeviceType::Keyboard => "Keyboard",
+                            DeviceType::Mouse => "Mouse",
+                            _ => "Device",
                         }
-                        DeviceType::Mouse => if device_count == 1 { "Mouse" } else { "Mice" }
-                        _ => "Devices",
-                    })
+                    )
+                } else {
+                    format!(
+                        "{} {} Selected",
+                        device_count,
+                        match props.device_type {
+                            DeviceType::Keyboard =>
+                                if device_count == 1 {
+                                    "Keyboard"
+                                } else {
+                                    "Keyboards"
+                                },
+                            DeviceType::Mouse =>
+                                if device_count == 1 {
+                                    "Mouse"
+                                } else {
+                                    "Mice"
+                                },
+                            _ => "Devices",
+                        }
+                    )
                 }
             }
         }
@@ -223,12 +230,10 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
     });
 
     // Get no devices message
-    let no_devices_message = use_memo(move || {
-        match props.device_type {
-            DeviceType::AudioOutput => "No audio devices found".to_string(),
-            DeviceType::Keyboard => "No keyboard devices found".to_string(),
-            DeviceType::Mouse => "No mouse devices found".to_string(),
-        }
+    let no_devices_message = use_memo(move || match props.device_type {
+        DeviceType::AudioOutput => "No audio devices found".to_string(),
+        DeviceType::Keyboard => "No keyboard devices found".to_string(),
+        DeviceType::Mouse => "No mouse devices found".to_string(),
     });
 
     // Combined device list for audio (includes system default)
@@ -261,21 +266,16 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
     });
 
     // Helper function to render device icon
-    let device_icon = move || {
-        match props.device_type {
-            DeviceType::AudioOutput =>
-                rsx! {
-                    Headphones { class: "w-4 h-4" }
-                },
-            DeviceType::Keyboard =>
-                rsx! {
-                    Keyboard { class: "w-4 h-4" }
-                },
-            DeviceType::Mouse =>
-                rsx! {
-                    Mouse { class: "w-4 h-4" }
-                },
-        }
+    let device_icon = move || match props.device_type {
+        DeviceType::AudioOutput => rsx! {
+            Headphones { class: "w-4 h-4" }
+        },
+        DeviceType::Keyboard => rsx! {
+            Keyboard { class: "w-4 h-4" }
+        },
+        DeviceType::Mouse => rsx! {
+            Mouse { class: "w-4 h-4" }
+        },
     };
 
     rsx! {
@@ -363,7 +363,7 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                             div { class: "space-y-2",
                                 // Available input devices
                                 for device in input_devices().iter() {
-                                    label { 
+                                    label {
                                         key: "{device.id}",
                                         class: "flex items-center gap-3 p-3 rounded-lg hover:bg-base-100 cursor-pointer transition-colors",
                                         input {

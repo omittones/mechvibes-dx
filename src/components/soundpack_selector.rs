@@ -1,5 +1,5 @@
 use crate::libs::audio::AudioContext;
-use crate::libs::soundpack::format::SoundpackType;
+use crate::libs::soundpack::cache::SoundpackType;
 use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use futures_timer::Delay;
@@ -61,7 +61,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
         let all_packs = soundpacks(); // Filter by type first
         let type_filtered_packs: Vec<_> = all_packs
             .into_iter()
-            .filter(|pack| pack.soundpack_type == soundpack_type)
+            .filter(|pack| pack.id.soundpack_type == soundpack_type)
             .collect();
 
         // Then filter by search query
@@ -72,7 +72,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                 .into_iter()
                 .filter(|pack| {
                     pack.name.to_lowercase().contains(&query)
-                        || pack.id.to_lowercase().contains(&query)
+                        || pack.id.id.to_lowercase().contains(&query)
                         || pack
                             .tags
                             .iter()
@@ -115,7 +115,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
     let has_soundpacks = use_memo(move || {
         soundpacks()
             .into_iter()
-            .any(|pack| pack.soundpack_type == soundpack_type)
+            .any(|pack| pack.id.soundpack_type == soundpack_type)
     });
 
     rsx! {
@@ -219,7 +219,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                       disabled: pack.config_path == current(),
                       // Use folder_path for comparison
                       onclick: {
-                          let pack_id = pack.config_path.clone();
+                          let pack_id = pack.id.clone();
                           let mut error = error.clone();
                           let soundpacks = soundpacks.clone();
                           let mut is_open = is_open.clone();
@@ -232,17 +232,16 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                               is_open.set(false);
                               search_query.set(String::new());
                               error.set(String::new());
-                              if let Some(_) = soundpacks().iter().find(|p| p.config_path == pack_id) {
+                              if let Some(_) = soundpacks().iter().find(|p| p.id == pack_id) {
                                   let pack_id_clone = pack_id.clone();
-                                  let soundpack_type_clone = soundpack_type_click.clone();
                                   update_config(
                                       Box::new(move |config| {
-                                          match soundpack_type_clone {
+                                          match pack_id_clone.soundpack_type {
                                               SoundpackType::Keyboard => {
-                                                  config.keyboard_soundpack = pack_id_clone;
+                                                  config.keyboard_soundpack = pack_id_clone.to_string();
                                               }
                                               SoundpackType::Mouse => {
-                                                  config.mouse_soundpack = pack_id_clone;
+                                                  config.mouse_soundpack = pack_id_clone.to_string();
                                               }
                                           }
                                       }),
@@ -255,20 +254,10 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                                   spawn(async move {
                                       is_loading_async.set(true);
                                       Delay::new(Duration::from_millis(1)).await;
-                                      let result = match soundpack_type_async {
-                                          SoundpackType::Keyboard => {
-                                              crate::libs::audio::load_keyboard_soundpack(
-                                                  &audio_ctx_async,
-                                                  &pack_id_async,
-                                              )
-                                          }
-                                          SoundpackType::Mouse => {
-                                              crate::libs::audio::load_mouse_soundpack(
-                                                  &audio_ctx_async,
-                                                  &pack_id_async,
-                                              )
-                                          }
-                                      };
+                                      let result = crate::libs::audio::load_soundpack_file(
+                                          &audio_ctx_async,
+                                          &pack_id_async,
+                                      );
                                       match result {
                                           Ok(_) => {}
                                           Err(e) => {

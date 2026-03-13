@@ -127,19 +127,16 @@ pub mod soundpacks {
     /// - **New format**: `{source}/{type}/{folder}` e.g. `builtin/keyboard/oreo`
     /// - **Legacy format**: folder name only, with `is_mouse` for type. Resolves custom first, then builtin.
     pub fn find_soundpack_dir(soundpack_id: &str, is_mouse: bool) -> String {
-        use crate::libs::soundpack::id::SoundpackId;
-
-        if let Some(id) = SoundpackId::parse(soundpack_id) {
-            return id.to_path_string();
-        }
-
-        // Legacy format: folder name only - check custom first, then builtin
         let type_dir = if is_mouse { "mouse" } else { "keyboard" };
-        let mut soundpack_dir = get_custom_soundpacks_dir().join(type_dir).join(soundpack_id);
+        let mut soundpack_dir = get_custom_soundpacks_dir()
+            .join(type_dir)
+            .join(soundpack_id);
         let config_path = soundpack_dir.join("config.json");
 
         if !config_path.exists() {
-            soundpack_dir = get_builtin_soundpacks_dir().join(type_dir).join(soundpack_id);
+            soundpack_dir = get_builtin_soundpacks_dir()
+                .join(type_dir)
+                .join(soundpack_id);
         }
 
         soundpack_dir.to_string_lossy().to_string()
@@ -148,18 +145,16 @@ pub mod soundpacks {
     /// Resolve a soundpack ID to absolute path. For legacy IDs (folder name only),
     /// requires is_mouse to determine type.
     pub fn resolve_soundpack_path(soundpack_id: &str, is_mouse: bool) -> std::path::PathBuf {
-        use crate::libs::soundpack::id::SoundpackId;
-
-        if let Some(id) = SoundpackId::parse(soundpack_id) {
-            return id.to_absolute_path();
-        }
-
         let type_dir = if is_mouse { "mouse" } else { "keyboard" };
-        let custom_path = get_custom_soundpacks_dir().join(type_dir).join(soundpack_id);
+        let custom_path = get_custom_soundpacks_dir()
+            .join(type_dir)
+            .join(soundpack_id);
         if custom_path.join("config.json").exists() {
             return custom_path;
         }
-        get_builtin_soundpacks_dir().join(type_dir).join(soundpack_id)
+        get_builtin_soundpacks_dir()
+            .join(type_dir)
+            .join(soundpack_id)
     }
 
     /// Ensure soundpack directories exist (keyboard and mouse)

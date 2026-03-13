@@ -1,6 +1,6 @@
 use crate::{
     components::ui::{PageHeader, SoundpackImportModal, SoundpackManager, SoundpackTable},
-    libs::soundpack::format::SoundpackType,
+    libs::soundpack::cache::SoundpackType,
     state::app::{use_app_state, use_state_trigger},
 };
 use dioxus::document::eval;
@@ -27,16 +27,18 @@ pub fn Soundpacks() -> Element {
     log::debug!(
         "🔄 Soundpacks component rendering with {} soundpacks",
         all_soundpacks.len()
-    ); // Filter soundpacks by type (these will update when all_soundpacks changes)
+    );
+
+    // Filter soundpacks by type (these will update when all_soundpacks changes)
     let keyboard_soundpacks: Vec<_> = all_soundpacks
         .iter()
-        .filter(|pack| pack.soundpack_type == SoundpackType::Keyboard)
+        .filter(|pack| pack.id.soundpack_type == SoundpackType::Keyboard)
         .cloned()
         .collect();
 
     let mouse_soundpacks: Vec<_> = all_soundpacks
         .iter()
-        .filter(|pack| pack.soundpack_type == SoundpackType::Mouse)
+        .filter(|pack| pack.id.soundpack_type == SoundpackType::Mouse)
         .cloned()
         .collect();
 
@@ -138,7 +140,7 @@ pub fn Soundpacks() -> Element {
           target_soundpack_type: match current_tab() {
               TabType::Keyboard => Some(SoundpackType::Keyboard),
               TabType::Mouse => Some(SoundpackType::Mouse),
-              TabType::Manage => None, // Let user choose in manage tab
+              TabType::Manage => None,
           },
           on_import_success: EventHandler::new(move |_| {
               trigger_update(());

@@ -1,12 +1,15 @@
 use crate::{
     components::ui::{ImportStep, ProgressStep},
-    libs::soundpack::{
-        format::SoundpackType,
-        installer::{
-            check_soundpack_id_conflict, extract_and_install_soundpack_with_type,
-            get_soundpack_id_from_zip,
+    libs::{
+        audio::load_soundpack,
+        soundpack::{
+            cache::SoundpackType,
+            installer::{
+                check_soundpack_id_conflict, extract_and_install_soundpack_with_type,
+                get_soundpack_id_from_zip,
+            },
+            validator::{validate_soundpack_structure, validate_zip_file},
         },
-        validator::{validate_soundpack_structure, validate_zip_file},
     },
     state::app::{use_app_state, use_state_trigger},
     utils::delay,
@@ -18,7 +21,7 @@ use std::sync::Arc;
 #[component]
 pub fn SoundpackImportModal(
     modal_id: String,
-    audio_ctx: Arc<crate::libs::audio::AudioContext>,
+    audio_ctx: Arc<crate::libs::audio::audio_context::AudioContext>,
     target_soundpack_type: Option<SoundpackType>,
     on_import_success: EventHandler<()>,
 ) -> Element {
@@ -31,10 +34,12 @@ pub fn SoundpackImportModal(
     let error_message = use_signal(|| String::new());
     let success_step = use_signal(|| ImportStep::Idle);
     let success_message = use_signal(|| String::new());
+
     // Success messages for each step
     let file_selected_message = use_signal(|| String::new());
     let installation_success_message = use_signal(|| String::new());
     let finalization_success_message = use_signal(|| String::new());
+
     // Get app state outside the handler
     let app_state = use_app_state();
     let state_trigger = use_state_trigger();
@@ -217,7 +222,7 @@ pub fn SoundpackImportModal(
                 delay::Delay::ms(500).await;
 
                 // Reload soundpacks in audio context
-                crate::state::app::reload_current_soundpacks(&audio_ctx);
+                let _ = load_soundpack(&audio_ctx, true);
 
                 // =============================================
                 // Step 6: Refreshing soundpack list

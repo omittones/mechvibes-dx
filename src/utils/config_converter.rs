@@ -198,7 +198,8 @@ pub fn convert_v1_to_v2(
         // For V1 single method, use the main sound file
         let main_file = if let Some(sound) = config.get("sound") {
             if let Some(sound_str) = sound.as_str() {
-                log::info!("🎵 Using main audio file from V1 single method: {}",
+                log::info!(
+                    "🎵 Using main audio file from V1 single method: {}",
                     sound_str
                 );
                 sound_str.to_string()
@@ -294,12 +295,15 @@ pub fn convert_v1_to_v2(
                                         if let Ok(concat_duration) =
                                             get_audio_duration_ms(&concat_path)
                                         {
-                                            log::info!("🔍 [ENTER DEBUG] Concatenated audio duration: {}ms",
+                                            log::info!(
+                                                "🔍 [ENTER DEBUG] Concatenated audio duration: {}ms",
                                                 concat_duration
                                             );
                                             if end_time > concat_duration {
-                                                log::info!("❌ [ENTER DEBUG] ERROR: End time ({}) > Concat duration ({})",
-                                                    end_time, concat_duration
+                                                log::info!(
+                                                    "❌ [ENTER DEBUG] ERROR: End time ({}) > Concat duration ({})",
+                                                    end_time,
+                                                    concat_duration
                                                 );
                                             }
                                         }
@@ -317,11 +321,16 @@ pub fn convert_v1_to_v2(
                                     key_def.insert("timing".to_string(), Value::Array(timing));
 
                                     definitions.insert(key_name.clone(), Value::Object(key_def));
-                                    log::info!("✅ Key '{}' -> {} [offset: {}ms, end: {}ms]",
-                                        key_name, audio_filename, offset, end_time
+                                    log::info!(
+                                        "✅ Key '{}' -> {} [offset: {}ms, end: {}ms]",
+                                        key_name,
+                                        audio_filename,
+                                        offset,
+                                        end_time
                                     );
                                 } else {
-                                    log::info!("⚠️ No offset found for audio file: {}",
+                                    log::info!(
+                                        "⚠️ No offset found for audio file: {}",
                                         audio_filename
                                     );
                                 }
@@ -596,8 +605,12 @@ fn concatenate_audio_files(
                 // Convert to target format if needed
                 let converted_samples =
                     if file_sample_rate != sample_rate || file_channels != channels {
-                        log::info!("🔄 Converting from {}Hz {} channels to {}Hz {} channels",
-                            file_sample_rate, file_channels, sample_rate, channels
+                        log::info!(
+                            "🔄 Converting from {}Hz {} channels to {}Hz {} channels",
+                            file_sample_rate,
+                            file_channels,
+                            sample_rate,
+                            channels
                         );
                         convert_audio_format(
                             &samples,
@@ -634,7 +647,8 @@ fn concatenate_audio_files(
                 }
 
                 all_samples.extend(&converted_samples);
-                log::info!("✅ Added {} samples from {}",
+                log::info!(
+                    "✅ Added {} samples from {}",
                     converted_samples.len(),
                     filename
                 );
@@ -728,8 +742,12 @@ fn concatenate_audio_files_with_timing(
                 // Convert to target format if needed
                 let converted_samples =
                     if file_sample_rate != sample_rate || file_channels != channels {
-                        log::info!("🔄 Converting from {}Hz {} channels to {}Hz {} channels",
-                            file_sample_rate, file_channels, sample_rate, channels
+                        log::info!(
+                            "🔄 Converting from {}Hz {} channels to {}Hz {} channels",
+                            file_sample_rate,
+                            file_channels,
+                            sample_rate,
+                            channels
                         );
                         convert_audio_format(
                             &samples,
@@ -769,7 +787,8 @@ fn concatenate_audio_files_with_timing(
                 }
 
                 all_samples.extend(&converted_samples);
-                log::info!("✅ Added {} samples from {} (offset: {:.2}ms, duration: {:.2}ms)",
+                log::info!(
+                    "✅ Added {} samples from {} (offset: {:.2}ms, duration: {:.2}ms)",
                     converted_samples.len(),
                     filename,
                     current_offset_ms,

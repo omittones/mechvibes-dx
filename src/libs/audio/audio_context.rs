@@ -97,7 +97,7 @@ impl AudioContext {
         MOUSE_AUDIO_VOLUME.get_or_init(|| Mutex::new(config.mouse_volume));
 
         // Load soundpack from config
-        match super::soundpack_loader::load_soundpack(&context) {
+        match super::load_soundpack(&context, false) {
             Ok(_) => {}
             Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),
         }
@@ -206,7 +206,7 @@ impl AudioContext {
         let config = AppConfig::load();
         AUDIO_VOLUME.get_or_init(|| Mutex::new(config.volume));
         MOUSE_AUDIO_VOLUME.get_or_init(|| Mutex::new(config.mouse_volume)); // Load soundpack from config
-        match super::soundpack_loader::load_soundpack(&context) {
+        match super::load_soundpack(&context, false) {
             Ok(_) => {}
             Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),
         }
