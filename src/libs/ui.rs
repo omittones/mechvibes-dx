@@ -7,7 +7,6 @@ use crate::libs::routes::Route;
 use crate::libs::soundpack::cache::{SoundpackRef, SoundpackType};
 use crate::libs::tray_service::request_tray_update;
 use crate::state::keyboard::KeyboardState;
-use crate::state::paths;
 use crate::utils::delay;
 
 use dioxus::desktop::RequestAsyncResponder;
@@ -209,7 +208,7 @@ pub fn app() -> Element {
                 .body(b"Not Found".to_vec())
                 .unwrap(),
         );
-    };
+    }
 
     // Set up asset handler for serving soundpack images
     // /soundpack-images/{source}/{type}/{folder}/{filename}
