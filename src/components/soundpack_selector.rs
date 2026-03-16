@@ -1,5 +1,5 @@
 use crate::libs::audio::AudioContext;
-use crate::libs::soundpack::cache::SoundpackType;
+use crate::libs::soundpack::cache::{SoundpackRef, SoundpackType};
 use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use futures_timer::Delay;
@@ -49,10 +49,11 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
     // Get current soundpack based on type
     let current = use_memo(move || {
         let config = config();
-        match soundpack_type {
-            SoundpackType::Keyboard => config.keyboard_soundpack.clone(),
-            SoundpackType::Mouse => config.mouse_soundpack.clone(),
-        }
+        SoundpackRef::parse(match soundpack_type {
+            SoundpackType::Keyboard => &config.keyboard_soundpack,
+            SoundpackType::Mouse => &config.mouse_soundpack,
+        })
+        .ok()
     });
 
     // Filter soundpacks based on search query and type, then sort by last_modified
@@ -86,13 +87,11 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
 
         filtered_packs
     });
-    let current_soundpack = use_memo(
-        move || {
-            soundpacks()
-                .into_iter()
-                .find(|pack| pack.config_path == current())
-        }, // Use folder_path for comparison
-    );
+    let current_soundpack = use_memo(move || {
+        soundpacks()
+            .into_iter()
+            .find(|pack| current().is_some_and(|id| id == pack.id))
+    });
 
     // Get appropriate placeholder and search text based on type
     let (placeholder_text, search_placeholder, not_found_text, no_soundpack_text) =
@@ -117,6 +116,59 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
             .into_iter()
             .any(|pack| pack.id.soundpack_type == soundpack_type)
     });
+
+    let select_soundpack = |id: SoundpackRef| {
+        let soundpack_id = id.clone();
+        let audio_ctx = audio_ctx.clone();
+        let update_config = update_config.clone();
+        let soundpack_exists = soundpacks().iter().any(|p| p.id == soundpack_id);
+
+        move |_| {
+            is_open.set(false);
+            search_query.set(String::new());
+            error.set(String::new());
+            if !soundpack_exists {
+                return;
+            }
+            {
+                let soundpack_id = soundpack_id.clone();
+                update_config(Box::new(move |config| match soundpack_id.soundpack_type {
+                    SoundpackType::Keyboard => {
+                        config.keyboard_soundpack = soundpack_id.to_string();
+                    }
+                    SoundpackType::Mouse => {
+                        config.mouse_soundpack = soundpack_id.to_string();
+                    }
+                }));
+            }
+            {
+                let soundpack_id = soundpack_id.clone();
+                let audio_ctx = audio_ctx.clone();
+                spawn(async move {
+                    is_loading.set(true);
+                    Delay::new(Duration::from_millis(1)).await;
+                    let result = crate::libs::audio::load_soundpack_file(&audio_ctx, &soundpack_id);
+                    match result {
+                        Ok(_) => {
+                            log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "❌ Failed to load {} soundpack: {}",
+                                soundpack_id.to_string(),
+                                e
+                            );
+                            error.set(format!(
+                                "Failed to load soundpack {}",
+                                soundpack_id.to_string(),
+                            ));
+                        }
+                    }
+                    is_loading.set(false);
+                });
+            }
+        }
+    };
 
     rsx! {
         div { class: "space-y-2",
@@ -214,67 +266,10 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                                         key: "{pack.id}",
                                         class: format!(
                                             "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-300 last:border-b-0 h-auto {}",
-                                            if pack.config_path == current() { "btn-disabled" } else { "btn-ghost" },
+                                            if current().is_some_and(|id| id == pack.id) { "btn-disabled" } else { "btn-ghost" },
                                         ),
-                                        disabled: pack.config_path == current(),
-                                        onclick: {
-                                            let soundpack_id = pack.id.clone();
-                                            let audio_ctx = audio_ctx.clone();
-                                            let update_config = update_config.clone();
-                                            let soundpack_exists = soundpacks().iter().any(|p| p.id == soundpack_id);
-
-                                            move |_| {
-                                                is_open.set(false);
-                                                search_query.set(String::new());
-                                                error.set(String::new());
-                                                if !soundpack_exists {
-
-                                                    return;
-                                                }
-                                                let soundpack_id = soundpack_id.clone();
-                                                update_config(
-                                                    Box::new(move |config| {
-                                                        match soundpack_id.soundpack_type {
-                                                            SoundpackType::Keyboard => {
-                                                                config.keyboard_soundpack = soundpack_id.to_string();
-                                                            }
-                                                            SoundpackType::Mouse => {
-                                                                config.mouse_soundpack = soundpack_id.to_string();
-                                                            }
-                                                        }
-                                                    }),
-                                                );
-                                                let soundpack_id = soundpack_id.clone();
-                                                let audio_ctx = audio_ctx.clone();
-                                                spawn(async move {
-                                                    is_loading.set(true);
-                                                    Delay::new(Duration::from_millis(1)).await;
-                                                    let result = crate::libs::audio::load_soundpack_file(
-                                                        &audio_ctx,
-                                                        &soundpack_id,
-                                                    );
-                                                    match result {
-                                                        Ok(_) => {
-                                                            log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());
-                                                        }
-                                                        Err(e) => {
-                                                            log::error!(
-                                                                "❌ Failed to load {} soundpack: {}", soundpack_id
-                                                                .to_string(), e
-                                                            );
-                                                            error
-                                                                .set(
-                                                                    format!(
-                                                                        "Failed to load soundpack {}",
-                                                                        soundpack_id.to_string(),
-                                                                    ),
-                                                                );
-                                                        }
-                                                    }
-                                                    is_loading.set(false);
-                                                });
-                                            }
-                                        },
+                                        disabled: current().is_some_and(|id| id == pack.id),
+                                        onclick: select_soundpack(pack.id.clone()),
                                         div { class: "flex items-center justify-between gap-3 ",
                                             div { class: "flex-shrink-0 w-8 h-8 rounded-box flex items-center justify-center bg-base-100 overflow-hidden relative",
                                                 if let Some(icon) = &pack.icon {
@@ -289,8 +284,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                                                 } else {
                                                     Music { class: "w-4 h-4 text-primary/50 bg-base-100" }
                                                 }
-                                                if pack.config_path == current() {
-                                                    // Use folder_path for comparison
+                                                if current().is_some_and(|id| id == pack.id) {
                                                     div { class: "absolute inset-0 bg-base-300/70 flex items-center justify-center ",
                                                         Check { class: "text-white w-6 h-6" }
                                                     }

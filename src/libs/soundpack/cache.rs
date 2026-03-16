@@ -134,7 +134,6 @@ pub struct SoundpackMetadata {
     pub author: Option<String>,
     pub tags: Vec<String>,
     pub icon: Option<String>,
-    pub config_path: String,
 }
 
 // ===== SOUNDPACK CACHE =====
@@ -307,9 +306,17 @@ fn scan_soundpack_type(
         log::info!("🔍 Processing soundpack {}", soundpack_path.display());
 
         match load_and_migrate_soundpack(&soundpack_path.to_string_lossy()) {
-            Ok((config_path, soundpack)) => {
-                let metadata =
-                    metadata_from_soundpack(&config_path, &soundpack, is_builtin, is_mouse);
+            Ok(soundpack) => {
+                let id = SoundpackRef {
+                    id: entry.file_name().to_string_lossy().to_string(),
+                    is_builtin: is_builtin,
+                    soundpack_type: if is_mouse {
+                        SoundpackType::Mouse
+                    } else {
+                        SoundpackType::Keyboard
+                    },
+                };
+                let metadata = metadata_from_soundpack(id, &soundpack);
                 cache.add_soundpack(metadata);
             }
             Err(e) => {
@@ -336,7 +343,6 @@ fn insert_error_metadata(
         .unwrap_or_default()
         .to_string_lossy()
         .to_string();
-    let config_path = soundpack_path.join("config.json");
 
     let error_metadata = SoundpackMetadata {
         id: SoundpackRef {
@@ -348,7 +354,6 @@ fn insert_error_metadata(
                 SoundpackType::Keyboard
             },
         },
-        config_path: config_path.to_string_lossy().to_string(),
         name: format!("Error: {}", file_name),
         author: None,
         tags: vec!["error".to_string()],
@@ -359,25 +364,15 @@ fn insert_error_metadata(
         .insert(error_metadata.id.clone(), error_metadata);
 }
 
-pub fn metadata_from_soundpack(
-    config_path: &str,
-    soundpack: &SoundPack,
-    is_builtin: bool,
-    is_mouse: bool,
-) -> SoundpackMetadata {
-    let id = SoundpackRef {
-        id: soundpack.id.clone(),
-        is_builtin: is_builtin,
-        soundpack_type: if is_mouse {
-            SoundpackType::Mouse
-        } else {
-            SoundpackType::Keyboard
-        },
-    };
+pub fn metadata_from_soundpack(id: SoundpackRef, soundpack: &SoundPack) -> SoundpackMetadata {
+    let config_path = id
+        .to_soundpack_path()
+        .join("config.json")
+        .to_string_lossy()
+        .to_string();
 
     SoundpackMetadata {
-        id: id,
-        config_path: config_path.to_string(),
+        id: id.clone(),
         name: soundpack.name.clone(),
         author: soundpack.author.clone(),
         tags: soundpack.tags.clone().unwrap_or_default(),
@@ -385,31 +380,26 @@ pub fn metadata_from_soundpack(
             if let Some(icon_filename) = &soundpack.icon {
                 let mut icon_path = PathBuf::from(config_path);
                 icon_path.set_file_name(icon_filename.trim_start_matches("./"));
-                log::debug!(
-                    "🔍 Checking icon for {}: {} -> exists: {}",
-                    soundpack.id,
-                    icon_path.display(),
-                    icon_path.exists()
-                );
                 if icon_path.exists() {
-                    // URL format: /soundpack-images/{source}/{type}/{folder}/{filename}
-                    // Legacy: /soundpack-images/{type}/{folder}/{filename}
-                    let type_str = if is_mouse { "mouse" } else { "keyboard" };
                     let asset_url = format!(
-                        "/soundpack-images/{}/{}/{}",
-                        type_str, soundpack.id, icon_filename
+                        "/soundpack-images/{}/{}/{}/{}",
+                        if id.is_builtin { "builtin" } else { "custom" },
+                        if id.soundpack_type == SoundpackType::Mouse {
+                            "mouse"
+                        } else {
+                            "keyboard"
+                        },
+                        id.id,
+                        icon_filename
                     );
-                    log::info!("✅ Generated asset URL for {}: {}", soundpack.id, asset_url);
+                    log::debug!("✅ Generated asset URL for {}: {}", id, asset_url);
                     Some(asset_url)
                 } else {
-                    log::error!(
-                        "❌ Icon not found for {}, setting empty string",
-                        soundpack.id
-                    );
+                    log::warn!("⚠️ Icon not found for {}, setting empty string", id);
                     Some(String::new())
                 }
             } else {
-                log::info!("ℹ️  No icon specified for {}", soundpack.id);
+                log::debug!("ℹ️  No icon specified for {}, setting empty string", id);
                 Some(String::new())
             }
         },

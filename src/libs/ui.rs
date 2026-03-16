@@ -4,11 +4,13 @@ use crate::libs::AudioContext;
 use crate::libs::audio::load_soundpack_from_config;
 use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
+use crate::libs::soundpack::cache::{SoundpackRef, SoundpackType};
 use crate::libs::tray_service::request_tray_update;
 use crate::state::keyboard::KeyboardState;
 use crate::state::paths;
 use crate::utils::delay;
 
+use dioxus::desktop::RequestAsyncResponder;
 use dioxus::desktop::tao::event::Event as TaoEvent;
 use dioxus::desktop::{use_asset_handler, use_wry_event_handler, wry::http::Response};
 use dioxus::prelude::*;
@@ -199,97 +201,95 @@ pub fn app() -> Element {
         });
     }
 
+    fn respond_not_found(response: RequestAsyncResponder) {
+        response.respond(
+            Response::builder()
+                .status(404)
+                .header("Content-Type", "text/plain")
+                .body(b"Not Found".to_vec())
+                .unwrap(),
+        );
+    };
+
     // Set up asset handler for serving soundpack images
-    // Supports: /soundpack-images/{source}/{type}/{folder}/{filename} (new) or
-    //           /soundpack-images/{type}/{folder}/{filename} (legacy)
+    // /soundpack-images/{source}/{type}/{folder}/{filename}
     use_asset_handler("soundpack-images", |request, response| {
         let request_path = request.uri().path();
 
-        let path_parts: Vec<&str> = request_path.trim_start_matches('/').split('/').collect();
+        let mut path_parts = request_path.trim_start_matches('/').split('/');
+        let dir = path_parts.next().unwrap_or_default();
+        let soundpack_source = path_parts.next().unwrap_or_default();
+        let soundpack_type = path_parts.next().unwrap_or_default();
+        let soundpack_id = path_parts.next().unwrap_or_default();
+        let filename = path_parts.next().unwrap_or_default();
 
-        let (soundpack_id, filename, is_mouse) =
-            if path_parts.len() >= 5 && path_parts[0] == "soundpack-images" {
-                // New format: soundpack-images/{source}/{type}/{folder}/{filename}
-                let soundpack_id = format!("{}/{}/{}", path_parts[1], path_parts[2], path_parts[3]);
-                let filename = path_parts[4];
-                let is_mouse = path_parts[2] == "mouse";
-                (soundpack_id, filename.to_string(), is_mouse)
-            } else if path_parts.len() >= 4 && path_parts[0] == "soundpack-images" {
-                // Legacy: soundpack-images/{type}/{folder}/{filename}
-                let soundpack_id = path_parts[2].to_string();
-                let filename = path_parts[3].to_string();
-                let is_mouse = path_parts[1] == "mouse";
-                (soundpack_id, filename, is_mouse)
+        // validate path parts
+        if dir != "soundpack-images"
+            || soundpack_source.is_empty()
+            || soundpack_id.is_empty()
+            || soundpack_type.is_empty()
+            || filename.is_empty()
+            || filename.contains("..")
+            || filename.contains('/')
+            || filename.contains('\\')
+        {
+            respond_not_found(response);
+            return;
+        }
+
+        let soundpack_ref = SoundpackRef {
+            id: soundpack_id.to_string(),
+            is_builtin: soundpack_source == "builtin",
+            soundpack_type: if soundpack_type == "mouse" {
+                SoundpackType::Mouse
             } else {
-                (String::new(), String::new(), false)
-            };
+                SoundpackType::Keyboard
+            },
+        };
 
-        if !soundpack_id.is_empty() && !filename.is_empty() {
-            // Security: Validate path segments to prevent directory traversal
-            if soundpack_id.contains("..")
-                || soundpack_id.contains("//")
-                || filename.contains("..")
-                || filename.contains('/')
-                || filename.contains('\\')
-            {
-                let error_response = Response::builder().status(400).body(Vec::new()).unwrap();
-                response.respond(error_response);
-                return;
-            }
+        let image_path = soundpack_ref.to_soundpack_path().join(filename);
+        if image_path.exists() {
+            // Read the file and determine content type
+            match std::fs::read(&image_path) {
+                Ok(data) => {
+                    let mut response_builder = Response::builder();
 
-            let soundpack_dir = paths::soundpacks::find_soundpack_dir(&soundpack_id, is_mouse);
-            let image_path = std::path::PathBuf::from(&soundpack_dir).join(filename);
+                    // Get extension and convert to lowercase for case-insensitive matching
+                    let extension = image_path
+                        .extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.to_lowercase());
 
-            if image_path.exists() {
-                // Read the file and determine content type
-                match std::fs::read(&image_path) {
-                    Ok(data) => {
-                        let mut response_builder = Response::builder();
+                    let content_type = match extension.as_deref() {
+                        Some("png") => "image/png",
+                        Some("jpg") | Some("jpeg") => "image/jpeg",
+                        Some("gif") => "image/gif",
+                        Some("svg") => "image/svg+xml",
+                        Some("webp") => "image/webp",
+                        Some("ico") => "image/x-icon",
+                        _ => "application/octet-stream",
+                    };
 
-                        // Get extension and convert to lowercase for case-insensitive matching
-                        let extension = image_path
-                            .extension()
-                            .and_then(|ext| ext.to_str())
-                            .map(|ext| ext.to_lowercase());
+                    response_builder = response_builder
+                        .header("Content-Type", content_type)
+                        .header("Cache-Control", "public, max-age=3600");
 
-                        let content_type = match extension.as_deref() {
-                            Some("png") => "image/png",
-                            Some("jpg") | Some("jpeg") => "image/jpeg",
-                            Some("gif") => "image/gif",
-                            Some("svg") => "image/svg+xml",
-                            Some("webp") => "image/webp",
-                            Some("ico") => "image/x-icon",
-                            _ => "application/octet-stream",
-                        };
-
-                        response_builder = response_builder
-                            .header("Content-Type", content_type)
-                            .header("Cache-Control", "public, max-age=3600");
-
-                        if let Ok(http_response) = response_builder.body(data) {
-                            response.respond(http_response);
-                            return;
-                        }
+                    if let Ok(http_response) = response_builder.body(data) {
+                        response.respond(http_response);
+                        return;
                     }
-                    Err(e) => {
-                        log::error!(
-                            "❌ Failed to read soundpack image file {:?}: {}",
-                            image_path,
-                            e
-                        );
-                    }
+                }
+                Err(e) => {
+                    log::error!(
+                        "❌ Failed to read soundpack image file {:?}: {}",
+                        image_path,
+                        e
+                    );
                 }
             }
         }
 
-        // Return 404 for invalid paths or missing files
-        if let Ok(not_found_response) = Response::builder()
-            .status(404)
-            .header("Content-Type", "text/plain")
-            .body(b"Not Found".to_vec())
-        {
-            response.respond(not_found_response);
-        }
+        respond_not_found(response);
     });
 
     // Set up asset handler for serving custom user images

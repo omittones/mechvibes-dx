@@ -6,11 +6,6 @@ use std::{collections::HashMap, fs, path::PathBuf};
 
 // ===== SOUNDPACK TYPES =====
 
-// Default function for config_version field
-fn default_config_version() -> u32 {
-    2
-}
-
 // Default function for options field
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SoundpackOptions {
@@ -131,11 +126,13 @@ impl SoundPack {
 /// Load and migrate a soundpack config from disk.
 /// Validates the config, runs V1→V2 and multi→single migrations if needed,
 /// and returns the config path and parsed config JSON.
-pub fn load_and_migrate_soundpack(soundpack_path: &str) -> Result<(String, SoundPack), String> {
+pub fn load_and_migrate_soundpack(soundpack_path: &str) -> Result<SoundPack, String> {
     let config_path = PathBuf::from(soundpack_path)
         .join("config.json")
         .to_string_lossy()
         .to_string();
+
+    log::info!("🔍 Validating soundpack config: {}", config_path);
 
     let validation_result = validate_soundpack_config(&config_path);
     if validation_result.status == SoundpackValidationStatus::VersionOneNeedsConversion
@@ -182,7 +179,7 @@ pub fn load_and_migrate_soundpack(soundpack_path: &str) -> Result<(String, Sound
 
     soundpack.validate_audio_file(soundpack_path)?;
 
-    Ok((config_path, soundpack))
+    Ok(soundpack)
 }
 
 #[cfg(test)]

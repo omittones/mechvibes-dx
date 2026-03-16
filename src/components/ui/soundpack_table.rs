@@ -189,21 +189,16 @@ pub fn SoundpackTable(
 pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
     let state_trigger = use_state_trigger();
 
-    // Handlers for button clicks
-
-    let soundpack_name = soundpack.name.clone();
-    let soundpack_config_path = soundpack.config_path.clone();
     let soundpack_id = soundpack.id.clone();
+    let soundpack_name = soundpack.name.clone();
     let on_open_folder_click = move |_| {
         let soundpack_name = soundpack_name.clone();
-        let soundpack_config_path = soundpack_config_path.clone();
         let soundpack_id = soundpack_id.clone();
 
         spawn(async move {
             log::debug!("🔍 Soundpack info:");
             log::info!("ID: {}", soundpack_id);
             log::info!("Name: {}", soundpack_name);
-            log::info!("Folder path: {}", soundpack_config_path);
 
             match open_soundpack_folder(&soundpack_id) {
                 Ok(_) => log::info!(

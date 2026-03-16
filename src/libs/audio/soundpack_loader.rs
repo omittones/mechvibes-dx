@@ -78,7 +78,7 @@ pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<
     // Load soundpack directly from filesystem
     let soundpack_dir = id.to_soundpack_path().to_string_lossy().to_string();
 
-    let (config_path, soundpack) = load_and_migrate_soundpack(&soundpack_dir)?;
+    let soundpack = load_and_migrate_soundpack(&soundpack_dir)?;
 
     // Load audio samples directly from file
     let samples = load_audio_file(&soundpack_dir, &soundpack)?;
@@ -96,12 +96,7 @@ pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<
 
     // Update metadata cache - create metadata with no error since loading succeeded
     let mut cache = load_cache();
-    let metadata = metadata_from_soundpack(
-        &config_path,
-        &soundpack,
-        id.is_builtin,
-        id.soundpack_type == SoundpackType::Mouse,
-    );
+    let metadata = metadata_from_soundpack(id.clone(), &soundpack);
     cache.add_soundpack(metadata);
     save_cache(&cache);
 
