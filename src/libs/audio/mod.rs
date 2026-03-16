@@ -4,4 +4,4 @@ pub mod sound_manager;
 pub mod soundpack_loader;
 
 pub use audio_context::AudioContext;
-pub use soundpack_loader::{load_soundpack, load_soundpack_file};
+pub use soundpack_loader::{load_soundpack_file, load_soundpack_from_config};

@@ -1,8 +1,7 @@
 /// Formats a Unix timestamp (seconds since epoch) as a human-friendly relative time string
 /// Examples: "Just now", "2 minutes ago", "1 hour ago", "3 days ago"
 pub fn format_relative_time(timestamp: u64) -> String {
-    let now = std::time::SystemTime
-        ::now()
+    let now = std::time::SystemTime::now()
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();

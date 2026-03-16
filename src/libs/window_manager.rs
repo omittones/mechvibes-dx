@@ -1,5 +1,5 @@
 use once_cell::sync::Lazy;
-use std::sync::{ Arc, Mutex, mpsc };
+use std::sync::{Arc, Mutex, mpsc};
 
 #[derive(Debug, Clone)]
 pub enum WindowAction {

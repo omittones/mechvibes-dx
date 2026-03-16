@@ -84,60 +84,60 @@ pub fn CustomizePage() -> Element {
     //     });
     // };
     rsx! {
-      div { class: "",
-        PageHeader {
-          title: "Customize".to_string(),
-          subtitle: "Vibe it your way!".to_string(),
-          icon: Some(rsx! {
-            Palette { class: "w-8 h-8 mx-auto" }
-          }),
+        div { class: "",
+            PageHeader {
+                title: "Customize".to_string(),
+                subtitle: "Vibe it your way!".to_string(),
+                icon: Some(rsx! {
+                    Palette { class: "w-8 h-8 mx-auto" }
+                }),
+            }
+            // Settings sections
+            div { class: "{crate::utils::spacing::SECTION_SPACING} mt-8", // Theme Section
+                Collapse {
+                    title: "Themes".to_string(),
+                    group_name: "customize-accordion".to_string(),
+                    default_open: true,
+                    variant: "border border-base-300 bg-base-200 text-base-content",
+                    content_class: "collapse-content text-sm text-base-content/70",
+                    children: rsx! {
+                        div { "Choose your preferred theme or create custom ones" }
+                        // Built-in theme toggler
+                        ThemeToggler {}
+                    },
+                }
+                LogoCollapseSection {}
+                BackgroundCollapseSection {}
+                        // Custom CSS Section
+            // div { class: "collapse collapse-arrow border border-base-300 bg-base-200 text-base-content",
+            //   input { r#type: "radio", name: "customize-accordion" }
+            //   div { class: "collapse-title font-semibold", "Custom CSS" }
+            //   div { class: "collapse-content",
+            //     fieldset { class: "fieldset mb-2",
+            //       legend { class: "fieldset-legend", "Add your custom CSS here" }
+            //       textarea {
+            //         class: "textarea w-full h-32 font-mono text-sm",
+            //         value: css_input(),
+            //         oninput: move |evt| css_input.set(evt.value()),
+            //       }
+            //       div { class: "label",
+            //         "Apply your own styles to customize the look and feel of the app."
+            //       }
+            //     }
+            //     button {
+            //       class: "btn btn-neutral btn-sm",
+            //       r#type: "button",
+            //       disabled: saving(),
+            //       onclick: on_save,
+            //       if saving() {
+            //         span { class: "loading loading-spinner loading-sm mr-2" }
+            //       }
+            //       "Save"
+            //     }
+            //   }
+            // }
+            }
         }
-        // Settings sections
-        div { class: "{crate::utils::spacing::SECTION_SPACING} mt-8", // Theme Section
-          Collapse {
-            title: "Themes".to_string(),
-            group_name: "customize-accordion".to_string(),
-            default_open: true,
-            variant: "border border-base-300 bg-base-200 text-base-content",
-            content_class: "collapse-content text-sm text-base-content/70",
-            children: rsx! {
-              div { "Choose your preferred theme or create custom ones" }
-              // Built-in theme toggler
-              ThemeToggler {}
-            },
-          }
-          LogoCollapseSection {}
-          BackgroundCollapseSection {}
-                // Custom CSS Section
-        // div { class: "collapse collapse-arrow border border-base-300 bg-base-200 text-base-content",
-        //   input { r#type: "radio", name: "customize-accordion" }
-        //   div { class: "collapse-title font-semibold", "Custom CSS" }
-        //   div { class: "collapse-content",
-        //     fieldset { class: "fieldset mb-2",
-        //       legend { class: "fieldset-legend", "Add your custom CSS here" }
-        //       textarea {
-        //         class: "textarea w-full h-32 font-mono text-sm",
-        //         value: css_input(),
-        //         oninput: move |evt| css_input.set(evt.value()),
-        //       }
-        //       div { class: "label",
-        //         "Apply your own styles to customize the look and feel of the app."
-        //       }
-        //     }
-        //     button {
-        //       class: "btn btn-neutral btn-sm",
-        //       r#type: "button",
-        //       disabled: saving(),
-        //       onclick: on_save,
-        //       if saving() {
-        //         span { class: "loading loading-spinner loading-sm mr-2" }
-        //       }
-        //       "Save"
-        //     }
-        //   }
-        // }
-        }
-      }
     }
 }
 
@@ -193,25 +193,25 @@ fn LogoCustomizationSection() -> Element {
         local_enable.set(enable_logo_customization());
     });
     rsx! {
-      div { class: "space-y-4", // Toggle switch for logo customization
-        Toggler {
-          title: "Enable logo customization".to_string(),
-          description: Some("Customize border, text, shadow and background colors".to_string()),
-          checked: local_enable(),
-          on_change: move |new_value: bool| {
-              local_enable.set(new_value);
-              update_config(
-                  Box::new(move |cfg| {
-                      cfg.enable_logo_customization = new_value;
-                  }),
-              );
-          },
+        div { class: "space-y-4", // Toggle switch for logo customization
+            Toggler {
+                title: "Enable logo customization".to_string(),
+                description: Some("Customize border, text, shadow and background colors".to_string()),
+                checked: local_enable(),
+                on_change: move |new_value: bool| {
+                    local_enable.set(new_value);
+                    update_config(
+                        Box::new(move |cfg| {
+                            cfg.enable_logo_customization = new_value;
+                        }),
+                    );
+                },
+            }
+            // Show LogoCustomizationPanel only when enabled
+            if local_enable() {
+                LogoCustomizationPanel {}
+            }
         }
-        // Show LogoCustomizationPanel only when enabled
-        if local_enable() {
-          LogoCustomizationPanel {}
-        }
-      }
     }
 }
 
@@ -314,197 +314,197 @@ fn LogoCustomizationPanel() -> Element {
     });
 
     rsx! {
-      div { class: "space-y-4",
-        // Preview
-        div { class: "space-y-2",
-          div { class: "text-sm text-base-content", "Preview" }
-          div { class: "grid grid-cols-2 gap-2 p-4 bg-base-100 rounded-box border border-base-300 space-y-3",
-            // Normal state preview
-            div {
-              div { class: "text-xs text-base-content/70", "Normal" }
-              div {
-                class: "select-none border-3 font-black py-2 px-4 text-2xl rounded-box flex justify-center items-center w-full mt-1",
-                style: format!(
-                    "border-color: {}; color: {}; {}; box-shadow: 0 3px 0 {}",
-                    border_color(),
-                    text_color(),
-                    if use_background_image() {
-                        if let Some(ref img) = background_image() {
-                            format!(
-                                "background-image: url('{}'); background-size: cover; background-position: center",
-                                img,
-                            )
-                        } else {
-                            format!("background: {}", background_color())
+        div { class: "space-y-4",
+            // Preview
+            div { class: "space-y-2",
+                div { class: "text-sm text-base-content", "Preview" }
+                div { class: "grid grid-cols-2 gap-2 p-4 bg-base-100 rounded-box border border-base-300 space-y-3",
+                    // Normal state preview
+                    div {
+                        div { class: "text-xs text-base-content/70", "Normal" }
+                        div {
+                            class: "select-none border-3 font-black py-2 px-4 text-2xl rounded-box flex justify-center items-center w-full mt-1",
+                            style: format!(
+                                "border-color: {}; color: {}; {}; box-shadow: 0 3px 0 {}",
+                                border_color(),
+                                text_color(),
+                                if use_background_image() {
+                                    if let Some(ref img) = background_image() {
+                                        format!(
+                                            "background-image: url('{}'); background-size: cover; background-position: center",
+                                            img,
+                                        )
+                                    } else {
+                                        format!("background: {}", background_color())
+                                    }
+                                } else {
+                                    format!("background: {}", background_color())
+                                },
+                                shadow_color(),
+                            ),
+                            "Mechvibes"
                         }
-                    } else {
-                        format!("background: {}", background_color())
-                    },
-                    shadow_color(),
-                ),
-                "Mechvibes"
-              }
-            }
-            // Muted state preview
-            div {
-              div { class: "text-xs text-base-content/70", "Muted" }
-              div {
-                class: format!(
-                    "select-none border-3 font-black py-2 px-4 text-2xl rounded-box flex justify-center items-center w-full mx-auto mt-1{}",
-                    if dimmed_when_muted() { " opacity-50" } else { "" },
-                ),
-                style: format!(
-                    "border-color: {}; color: {}; {}",
-                    border_color(),
-                    text_color(),
-                    if use_muted_background_image() {
-                        if let Some(ref img) = muted_background_image() {
-                            format!(
-                                "background-image: url('{}'); background-size: cover; background-position: center",
-                                img,
-                            )
-                        } else {
-                            format!("background: {}", muted_background())
+                    }
+                    // Muted state preview
+                    div {
+                        div { class: "text-xs text-base-content/70", "Muted" }
+                        div {
+                            class: format!(
+                                "select-none border-3 font-black py-2 px-4 text-2xl rounded-box flex justify-center items-center w-full mx-auto mt-1{}",
+                                if dimmed_when_muted() { " opacity-50" } else { "" },
+                            ),
+                            style: format!(
+                                "border-color: {}; color: {}; {}",
+                                border_color(),
+                                text_color(),
+                                if use_muted_background_image() {
+                                    if let Some(ref img) = muted_background_image() {
+                                        format!(
+                                            "background-image: url('{}'); background-size: cover; background-position: center",
+                                            img,
+                                        )
+                                    } else {
+                                        format!("background: {}", muted_background())
+                                    }
+                                } else {
+                                    format!("background: {}", muted_background())
+                                },
+                            ),
+                            "Mechvibes"
                         }
-                    } else {
-                        format!("background: {}", muted_background())
-                    },
-                ),
-                "Mechvibes"
-              }
+                    }
+                }
             }
-          }
-        }
-        // Border Color
-        ColorPicker {
-          label: "Border Color".to_string(),
-          selected_value: border_color(),
-          options: color_options.clone(),
-          placeholder: "Select a color...".to_string(),
-          on_change: move |color: String| border_color.set(color),
-          field: "border_color".to_string(),
-          description: None,
-        }
-        // Text Color
-        ColorPicker {
-          label: "Text Color".to_string(),
-          selected_value: text_color(),
-          options: color_options.clone(),
-          placeholder: "Select a color...".to_string(),
-          on_change: move |value| text_color.set(value),
-          field: "text_color".to_string(),
-          description: None,
-        } // Shadow Color
-        ColorPicker {
-          label: "Shadow Color".to_string(),
-          selected_value: shadow_color(),
-          options: color_options.clone(),
-          placeholder: "Select a color...".to_string(),
-          on_change: move |value| shadow_color.set(value),
-          field: "shadow_color".to_string(),
-          description: None,
-        }
-        // Background Section
-        div { class: "space-y-3 p-3 border border-base-300 rounded-box bg-base-100",
-          h4 { class: "text-sm font-semibold text-base-content", "Background (Normal)" }
-          // Toggle between color and image for normal background
-          Toggler {
-            title: "Use image".to_string(),
-            description: Some("Use image instead of solid color".to_string()),
-            checked: use_background_image(),
-            on_change: move |new_value: bool| {
-                use_background_image.set(new_value);
-            },
-          }
-          // Background Color Picker (shown when not using image)
-          if !use_background_image() {
+            // Border Color
             ColorPicker {
-              label: "Color".to_string(),
-              selected_value: background_color(),
-              options: color_options.clone(),
-              placeholder: "Select a color...".to_string(),
-              on_change: move |value| background_color.set(value),
-              field: "background_color".to_string(),
-              description: None,
+                label: "Border Color".to_string(),
+                selected_value: border_color(),
+                options: color_options.clone(),
+                placeholder: "Select a color...".to_string(),
+                on_change: move |color: String| border_color.set(color),
+                field: "border_color".to_string(),
+                description: None,
             }
-          }
-          // Background Image Selector (shown when using image)
-          if use_background_image() {
-            ImagePicker {
-              label: "Background Image".to_string(),
-              value: background_image(),
-              on_change: move |value| background_image.set(value),
-              dialog_title: "Select Background Image".to_string(),
+            // Text Color
+            ColorPicker {
+                label: "Text Color".to_string(),
+                selected_value: text_color(),
+                options: color_options.clone(),
+                placeholder: "Select a color...".to_string(),
+                on_change: move |value| text_color.set(value),
+                field: "text_color".to_string(),
+                description: None,
+            } // Shadow Color
+            ColorPicker {
+                label: "Shadow Color".to_string(),
+                selected_value: shadow_color(),
+                options: color_options.clone(),
+                placeholder: "Select a color...".to_string(),
+                on_change: move |value| shadow_color.set(value),
+                field: "shadow_color".to_string(),
+                description: None,
             }
-          }
+            // Background Section
+            div { class: "space-y-3 p-3 border border-base-300 rounded-box bg-base-100",
+                h4 { class: "text-sm font-semibold text-base-content", "Background (Normal)" }
+                // Toggle between color and image for normal background
+                Toggler {
+                    title: "Use image".to_string(),
+                    description: Some("Use image instead of solid color".to_string()),
+                    checked: use_background_image(),
+                    on_change: move |new_value: bool| {
+                        use_background_image.set(new_value);
+                    },
+                }
+                // Background Color Picker (shown when not using image)
+                if !use_background_image() {
+                    ColorPicker {
+                        label: "Color".to_string(),
+                        selected_value: background_color(),
+                        options: color_options.clone(),
+                        placeholder: "Select a color...".to_string(),
+                        on_change: move |value| background_color.set(value),
+                        field: "background_color".to_string(),
+                        description: None,
+                    }
+                }
+                // Background Image Selector (shown when using image)
+                if use_background_image() {
+                    ImagePicker {
+                        label: "Background Image".to_string(),
+                        value: background_image(),
+                        on_change: move |value| background_image.set(value),
+                        dialog_title: "Select Background Image".to_string(),
+                    }
+                }
+            }
+
+            // Muted Background Section
+            div { class: "space-y-3 p-3 border border-base-300 rounded-box bg-base-100",
+                h4 { class: "text-sm font-semibold text-base-content", "Background (Muted)" }
+                // Toggle between color and image for muted background
+                Toggler {
+                    title: "Use image".to_string(),
+                    description: Some("Use image instead of solid color".to_string()),
+                    checked: use_muted_background_image(),
+                    on_change: move |new_value: bool| {
+                        use_muted_background_image.set(new_value);
+                    },
+                }
+                // Muted Background Color Picker (shown when not using image)
+                if !use_muted_background_image() {
+                    ColorPicker {
+                        label: "Color".to_string(),
+                        selected_value: muted_background(),
+                        options: color_options.clone(),
+                        placeholder: "Select a color...".to_string(),
+                        on_change: move |value| muted_background.set(value),
+                        field: "muted_background".to_string(),
+                        description: Some("Background color when sound is disabled".to_string()),
+                    }
+                }
+                // Muted Background Image Selector (shown when using image)
+                if use_muted_background_image() {
+                    ImagePicker {
+                        label: "Image".to_string(),
+                        value: muted_background_image(),
+                        on_change: move |value| muted_background_image.set(value),
+                        dialog_title: "Select Muted Background Image".to_string(),
+                    }
+                }
+            }
+            // Dimmed logo when muted option
+            Toggler {
+                title: "Dimmed logo when muted".to_string(),
+                description: Some("Applies opacity to the logo when sound is disabled".to_string()),
+                checked: dimmed_when_muted(),
+                on_change: move |new_value: bool| {
+                    dimmed_when_muted.set(new_value);
+                },
+            }
         }
 
-        // Muted Background Section
-        div { class: "space-y-3 p-3 border border-base-300 rounded-box bg-base-100",
-          h4 { class: "text-sm font-semibold text-base-content", "Background (Muted)" }
-          // Toggle between color and image for muted background
-          Toggler {
-            title: "Use image".to_string(),
-            description: Some("Use image instead of solid color".to_string()),
-            checked: use_muted_background_image(),
-            on_change: move |new_value: bool| {
-                use_muted_background_image.set(new_value);
-            },
-          }
-          // Muted Background Color Picker (shown when not using image)
-          if !use_muted_background_image() {
-            ColorPicker {
-              label: "Color".to_string(),
-              selected_value: muted_background(),
-              options: color_options.clone(),
-              placeholder: "Select a color...".to_string(),
-              on_change: move |value| muted_background.set(value),
-              field: "muted_background".to_string(),
-              description: Some("Background color when sound is disabled".to_string()),
+        // Action buttons
+        div { class: "flex gap-2 mt-3",
+            button {
+                class: "btn btn-neutral btn-sm",
+                disabled: saving(),
+                onclick: on_save,
+                if saving() {
+                    span { class: "loading loading-spinner loading-sm mr-2" }
+                } else {
+                    Check { class: "w-4 h-4 mr-1" }
+                }
+                "Save changes"
             }
-          }
-          // Muted Background Image Selector (shown when using image)
-          if use_muted_background_image() {
-            ImagePicker {
-              label: "Image".to_string(),
-              value: muted_background_image(),
-              on_change: move |value| muted_background_image.set(value),
-              dialog_title: "Select Muted Background Image".to_string(),
+            button { class: "btn btn-ghost btn-sm", onclick: on_reset,
+                RotateCcw { class: "w-4 h-4 mr-1" }
+                "Reset"
             }
-          }
         }
-        // Dimmed logo when muted option
-        Toggler {
-          title: "Dimmed logo when muted".to_string(),
-          description: Some("Applies opacity to the logo when sound is disabled".to_string()),
-          checked: dimmed_when_muted(),
-          on_change: move |new_value: bool| {
-              dimmed_when_muted.set(new_value);
-          },
+        div { class: "text-sm text-base-content/50 mt-3",
+            "When you reset the logo customization, it will revert to the selected theme colors."
         }
-      }
-
-      // Action buttons
-      div { class: "flex gap-2 mt-3",
-        button {
-          class: "btn btn-neutral btn-sm",
-          disabled: saving(),
-          onclick: on_save,
-          if saving() {
-            span { class: "loading loading-spinner loading-sm mr-2" }
-          } else {
-            Check { class: "w-4 h-4 mr-1" }
-          }
-          "Save changes"
-        }
-        button { class: "btn btn-ghost btn-sm", onclick: on_reset,
-          RotateCcw { class: "w-4 h-4 mr-1" }
-          "Reset"
-        }
-      }
-      div { class: "text-sm text-base-content/50 mt-3",
-        "When you reset the logo customization, it will revert to the selected theme colors."
-      }
     }
 }
 
@@ -523,26 +523,26 @@ fn BackgroundCustomizationSection() -> Element {
     });
 
     rsx! {
-      div { class: "space-y-4",
-        // Toggle switch for background customization
-        Toggler {
-          title: "Enable background customization".to_string(),
-          description: Some("Customize app background with colors or images".to_string()),
-          checked: local_enable(),
-          on_change: move |new_value: bool| {
-              local_enable.set(new_value);
-              update_config(
-                  Box::new(move |cfg| {
-                      cfg.enable_background_customization = new_value;
-                  }),
-              );
-          },
+        div { class: "space-y-4",
+            // Toggle switch for background customization
+            Toggler {
+                title: "Enable background customization".to_string(),
+                description: Some("Customize app background with colors or images".to_string()),
+                checked: local_enable(),
+                on_change: move |new_value: bool| {
+                    local_enable.set(new_value);
+                    update_config(
+                        Box::new(move |cfg| {
+                            cfg.enable_background_customization = new_value;
+                        }),
+                    );
+                },
+            }
+            // Show BackgroundCustomizationPanel only when enabled
+            if local_enable() {
+                BackgroundCustomizationPanel {}
+            }
         }
-        // Show BackgroundCustomizationPanel only when enabled
-        if local_enable() {
-          BackgroundCustomizationPanel {}
-        }
-      }
     }
 }
 
@@ -613,57 +613,57 @@ fn BackgroundCustomizationPanel() -> Element {
     });
 
     rsx! {
-      div { class: "space-y-4",
-        // Toggle between color and image
-        Toggler {
-          title: "Use image".to_string(),
-          description: Some("Use image instead of solid color".to_string()),
-          checked: use_image(),
-          on_change: move |new_value: bool| {
-              use_image.set(new_value);
-          },
-        }
-
-        // Background Color Picker (shown when not using image)
-        if !use_image() {
-          ColorPicker {
-            label: "Background Color".to_string(),
-            selected_value: background_color(),
-            options: color_options.clone(),
-            placeholder: "Select a color...".to_string(),
-            on_change: move |color: String| background_color.set(color),
-            field: "background_color".to_string(),
-            description: None,
-          }
-        }
-        // Background Image Selector (shown when using image)
-        if use_image() {
-          ImagePicker {
-            label: "Background Image".to_string(),
-            value: background_image(),
-            on_change: move |value| background_image.set(value),
-            dialog_title: "Select Background Image".to_string(),
-          }
-        }
-
-        // Action buttons
-        div { class: "flex gap-2 mt-4",
-          button {
-            class: "btn btn-neutral btn-sm",
-            disabled: saving(),
-            onclick: on_save,
-            if saving() {
-              span { class: "loading loading-spinner loading-sm mr-2" }
-            } else {
-              Check { class: "w-4 h-4 mr-1" }
+        div { class: "space-y-4",
+            // Toggle between color and image
+            Toggler {
+                title: "Use image".to_string(),
+                description: Some("Use image instead of solid color".to_string()),
+                checked: use_image(),
+                on_change: move |new_value: bool| {
+                    use_image.set(new_value);
+                },
             }
-            "Save changes"
-          }
-          button { class: "btn btn-ghost btn-sm", onclick: on_reset,
-            RotateCcw { class: "w-4 h-4 mr-1" }
-            "Reset"
-          }
+
+            // Background Color Picker (shown when not using image)
+            if !use_image() {
+                ColorPicker {
+                    label: "Background Color".to_string(),
+                    selected_value: background_color(),
+                    options: color_options.clone(),
+                    placeholder: "Select a color...".to_string(),
+                    on_change: move |color: String| background_color.set(color),
+                    field: "background_color".to_string(),
+                    description: None,
+                }
+            }
+            // Background Image Selector (shown when using image)
+            if use_image() {
+                ImagePicker {
+                    label: "Background Image".to_string(),
+                    value: background_image(),
+                    on_change: move |value| background_image.set(value),
+                    dialog_title: "Select Background Image".to_string(),
+                }
+            }
+
+            // Action buttons
+            div { class: "flex gap-2 mt-4",
+                button {
+                    class: "btn btn-neutral btn-sm",
+                    disabled: saving(),
+                    onclick: on_save,
+                    if saving() {
+                        span { class: "loading loading-spinner loading-sm mr-2" }
+                    } else {
+                        Check { class: "w-4 h-4 mr-1" }
+                    }
+                    "Save changes"
+                }
+                button { class: "btn btn-ghost btn-sm", onclick: on_reset,
+                    RotateCcw { class: "w-4 h-4 mr-1" }
+                    "Reset"
+                }
+            }
         }
-      }
     }
 }

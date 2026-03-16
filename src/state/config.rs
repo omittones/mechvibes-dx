@@ -143,7 +143,8 @@ impl AppConfig {
             }
             Err(e) => {
                 log::error!(
-                    "Warning: Failed to load config file: {}. Using defaults.",
+                    "Warning: Failed to load config file from {}: {}. Using defaults.",
+                    config_path.display(),
                     e
                 );
                 let default_config = Self::default();

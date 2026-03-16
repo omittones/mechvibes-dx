@@ -124,7 +124,10 @@ fn map_device_query_keycode(key: Keycode) -> &'static str {
 
 /// Start the focused keyboard listener (uses device_query polling)
 /// This listener is ONLY active when the window is focused
-pub fn start_focused_keyboard_listener(keyboard_tx: channel::Sender<String>, is_focused: Arc<Mutex<bool>>) {
+pub fn start_focused_keyboard_listener(
+    keyboard_tx: channel::Sender<String>,
+    is_focused: Arc<Mutex<bool>>,
+) {
     thread::spawn(move || {
         log::info!("🎮 Starting focused keyboard listener (device_query polling)...");
 
@@ -158,7 +161,11 @@ pub fn start_focused_keyboard_listener(keyboard_tx: channel::Sender<String>, is_
                     if !key_code.is_empty() {
                         match keyboard_tx.send(key_code.to_string()) {
                             Ok(()) => log::debug!("[focused] Key press detected: {}", key_code),
-                            Err(e) => log::error!("[focused] Failed to send key press '{}': {}", key_code, e),
+                            Err(e) => log::error!(
+                                "[focused] Failed to send key press '{}': {}",
+                                key_code,
+                                e
+                            ),
                         }
                     } else {
                         log::debug!("[focused] Ignored unmapped key press: {:?}", key);
@@ -171,7 +178,11 @@ pub fn start_focused_keyboard_listener(keyboard_tx: channel::Sender<String>, is_
                     if !key_code.is_empty() {
                         match keyboard_tx.send(format!("UP:{}", key_code)) {
                             Ok(()) => log::debug!("[focused] Key release detected: {}", key_code),
-                            Err(e) => log::error!("[focused] Failed to send key release '{}': {}", key_code, e),
+                            Err(e) => log::error!(
+                                "[focused] Failed to send key release '{}': {}",
+                                key_code,
+                                e
+                            ),
                         }
                     } else {
                         log::debug!("[focused] Ignored unmapped key release: {:?}", key);

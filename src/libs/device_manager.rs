@@ -1,5 +1,5 @@
-use cpal::traits::{ DeviceTrait, HostTrait };
-use cpal::{ Device, Host };
+use cpal::traits::{DeviceTrait, HostTrait};
+use cpal::{Device, Host};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceInfo {
@@ -40,12 +40,8 @@ impl DeviceManager {
             Ok(device_iter) => {
                 for (index, device) in device_iter.enumerate() {
                     if let Ok(name) = device.name() {
-                        let is_default =
-                            Some(&name) ==
-                            default_device
-                                .as_ref()
-                                .and_then(|d| d.name().ok())
-                                .as_ref();
+                        let is_default = Some(&name)
+                            == default_device.as_ref().and_then(|d| d.name().ok()).as_ref();
 
                         devices.push(DeviceInfo {
                             id: format!("output_{}", index),
@@ -85,12 +81,8 @@ impl DeviceManager {
             Ok(device_iter) => {
                 for (index, device) in device_iter.enumerate() {
                     if let Ok(name) = device.name() {
-                        let is_default =
-                            Some(&name) ==
-                            default_device
-                                .as_ref()
-                                .and_then(|d| d.name().ok())
-                                .as_ref();
+                        let is_default = Some(&name)
+                            == default_device.as_ref().and_then(|d| d.name().ok()).as_ref();
 
                         devices.push(DeviceInfo {
                             id: format!("input_{}", index),

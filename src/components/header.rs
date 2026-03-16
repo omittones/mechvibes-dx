@@ -1,6 +1,6 @@
-use crate::libs::theme::{ use_theme, Theme };
-use crate::utils::theme::use_themes;
+use crate::libs::theme::{Theme, use_theme};
 use crate::utils::constants::CSS_ID_PREFIX;
+use crate::utils::theme::use_themes;
 use dioxus::document::eval;
 use dioxus::prelude::*;
 
@@ -64,18 +64,17 @@ pub fn Header() -> Element {
                 font-family: "Lato", sans-serif;
             }}
             "#,
-            LATO_REGULAR,
-            LATO_BOLD,
-            LATO_ITALIC,
-            LATO_BOLD_ITALIC,
-            LATO_BLACK
+            LATO_REGULAR, LATO_BOLD, LATO_ITALIC, LATO_BOLD_ITALIC, LATO_BLACK
         );
 
         // Get custom theme CSS if current theme is custom
         let custom_theme_css = if let Theme::Custom(theme_id) = &theme() {
             if let Some(theme_data) = themes().get_theme_by_id(theme_id) {
                 // Wrap custom theme CSS with proper data-theme selectors
-                format!("[data-theme=\"custom-{}\"] {{\n{}\n}}", theme_id, theme_data.css)
+                format!(
+                    "[data-theme=\"custom-{}\"] {{\n{}\n}}",
+                    theme_id, theme_data.css
+                )
             } else {
                 String::new()
             }
@@ -108,10 +107,10 @@ pub fn Header() -> Element {
     });
 
     rsx! {
-      // prettier-ignore
-      document::Link { rel: "icon", r#type: "image/x-icon", href: FAVICON }
+        // prettier-ignore
+        document::Link { rel: "icon", r#type: "image/x-icon", href: FAVICON }
 
-      // Inline global styles since asset!() for CSS doesn't work in desktop apps
-      style { dangerous_inner_html: GLOBAL_STYLES_CSS }
+        // Inline global styles since asset!() for CSS doesn't work in desktop apps
+        style { dangerous_inner_html: GLOBAL_STYLES_CSS }
     }
 }

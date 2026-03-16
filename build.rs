@@ -11,7 +11,10 @@ fn main() -> io::Result<()> {
 
         // Set application metadata
         res.set("ProductName", "MechvibesDX");
-        res.set("FileDescription", "MechvibesDX - Interactive Sound Simulator");
+        res.set(
+            "FileDescription",
+            "MechvibesDX - Interactive Sound Simulator",
+        );
         res.set("CompanyName", "Hai Nguyen");
         res.set("LegalCopyright", "Copyright (C) 2026 Hai Nguyen");
 

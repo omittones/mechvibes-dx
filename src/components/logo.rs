@@ -17,8 +17,7 @@ pub fn Logo() -> Element {
     let key_pressed = keyboard_state.read().key_pressed;
 
     // Apply dynamic styling based on whether a key is pressed
-    let base =
-        "logo select-none border-4 font-black py-6 px-8 pt-7 text-5xl rounded-box transition-all duration-150 ease-in-out flex justify-center items-center ";
+    let base = "logo select-none border-4 font-black py-6 px-8 pt-7 text-5xl rounded-box transition-all duration-150 ease-in-out flex justify-center items-center ";
 
     // Create dynamic styles - only apply custom colors if logo customization is enabled
     let dynamic_style = if enable_logo_customization() {
@@ -29,7 +28,10 @@ pub fn Logo() -> Element {
             // Normal state - use background image if enabled, otherwise use color
             if logo_colors.use_background_image {
                 if let Some(ref img) = logo_colors.background_image {
-                    format!("background-image: url('{}'); background-size: cover; background-position: center", img)
+                    format!(
+                        "background-image: url('{}'); background-size: cover; background-position: center",
+                        img
+                    )
                 } else {
                     format!("background: {}", logo_colors.background_color)
                 }
@@ -40,7 +42,10 @@ pub fn Logo() -> Element {
             // Muted state - use muted background image if enabled, otherwise use muted color
             if logo_colors.use_muted_background_image {
                 if let Some(ref img) = logo_colors.muted_background_image {
-                    format!("background-image: url('{}'); background-size: cover; background-position: center", img)
+                    format!(
+                        "background-image: url('{}'); background-size: cover; background-position: center",
+                        img
+                    )
                 } else {
                     format!("background: {}", logo_colors.muted_background)
                 }
@@ -98,6 +103,6 @@ pub fn Logo() -> Element {
     };
 
     rsx! {
-      div { class: "{final_class}", style: "{dynamic_style}", "Mechvibes" }
+        div { class: "{final_class}", style: "{dynamic_style}", "Mechvibes" }
     }
 }

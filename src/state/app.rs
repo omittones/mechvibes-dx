@@ -97,8 +97,6 @@ pub fn use_state_trigger() -> Callback<()> {
     })
 }
 
-
-
 // Initialize the app state - call this once at startup
 pub fn init_app_state() {
     if GLOBAL_APP_STATE.get().is_none() {

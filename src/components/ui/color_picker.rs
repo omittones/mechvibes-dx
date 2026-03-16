@@ -86,9 +86,7 @@ pub fn ColorPicker(
                 }
             }
             if let Some(desc) = description {
-                div { class: "text-xs text-base-content/50",
-                    "{desc}"
-                }
+                div { class: "text-xs text-base-content/50", "{desc}" }
             }
         }
     }

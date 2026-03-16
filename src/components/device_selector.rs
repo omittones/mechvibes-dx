@@ -298,7 +298,8 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
             }
 
             if let Some(desc) = &props.description {
-                p { class: "text-xs text-base-content/60", "{desc}" }            }
+                p { class: "text-xs text-base-content/60", "{desc}" }
+            }
 
             // Device list with radio buttons
             div { class: "bg-base-100 px-4 py-3 rounded-box space-y-2",
@@ -308,10 +309,12 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                             div { class: "text-center text-base-content/50 py-8",
                                 {device_icon()}
                                 div { class: "mt-2 text-sm", "{no_devices_message()}" }
-                            }                        } else {
+                            }
+                            // Unified device list (system default + hardware devices)
+                        } else {
                             div { class: "space-y-2",
-                                // Unified device list (system default + hardware devices)
-                                for (device_id, device_name, badge_text, is_default) in all_audio_devices().iter() {
+                                // Available input devices
+                                for (device_id , device_name , badge_text , is_default) in all_audio_devices().iter() {
                                     label {
                                         key: "{device_id}",
                                         class: "flex items-center gap-3 rounded-lg hover:bg-base-100 cursor-pointer transition-colors",
@@ -319,17 +322,13 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                                             r#type: "radio",
                                             name: "audio-device",
                                             class: "radio radio-xs radio-primary",
-                                            checked: if device_id == "default" {
-                                                current_selection().0.is_none()
-                                            } else {
-                                                current_selection().0.as_ref() == Some(device_id)
-                                            },
+                                            checked: if device_id == "default" { current_selection().0.is_none() } else { current_selection().0.as_ref() == Some(device_id) },
                                             onchange: {
                                                 let device_id_clone = device_id.clone();
                                                 move |_| {
                                                     handle_device_action.call(device_id_clone.clone());
                                                 }
-                                            }
+                                            },
                                         }
                                         div { class: "flex items-center gap-2 flex-1",
                                             div { class: "flex-1 min-w-0",
@@ -361,7 +360,6 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                             }
                         } else {
                             div { class: "space-y-2",
-                                // Available input devices
                                 for device in input_devices().iter() {
                                     label {
                                         key: "{device.id}",
@@ -375,7 +373,7 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                                                 move |_| {
                                                     handle_device_action.call(device_id.clone());
                                                 }
-                                            }
+                                            },
                                         }
                                         div { class: "flex items-center gap-2 flex-1",
                                             {device_icon()}
@@ -405,7 +403,8 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                         "⚠️ Selected device may not be available. Audio may not work properly."
                     }
                 }
-            }        }
+            }
+        }
     }
 }
 

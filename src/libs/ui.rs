@@ -1,7 +1,7 @@
 use crate::components::header::Header;
 use crate::components::window_controller::WindowController;
 use crate::libs::AudioContext;
-use crate::libs::audio::load_soundpack;
+use crate::libs::audio::load_soundpack_from_config;
 use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
 use crate::libs::tray_service::request_tray_update;
@@ -47,7 +47,7 @@ pub fn app() -> Element {
         let ctx = audio_context.clone();
         use_effect(move || {
             log::debug!("🎵 Loading current soundpacks on startup...");
-            let _ = load_soundpack(&ctx, true);
+            let _ = load_soundpack_from_config(&ctx, true);
         });
     }
 
@@ -389,15 +389,10 @@ pub fn app() -> Element {
     rsx! {
         // Loading overlay (shown while CSS loads)
         if is_loading() {
-            div {
-                style: "position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background: #1a1a1a;",
-                div {
-                    style: "display: flex; flex-direction: column; align-items: center; gap: 1rem;",
-                    div {
-                        style: "width: 3rem; height: 3rem; border: 4px solid rgba(255, 255, 255, 0.2); border-top-color: rgba(255, 255, 255, 0.9); border-radius: 50%; animation: spin 1s linear infinite;",
-                    }
-                    div {
-                        style: "font-size: 0.875rem; font-weight: 500; color: rgba(255, 255, 255, 0.7);",
+            div { style: "position: fixed; inset: 0; z-index: 99999; display: flex; align-items: center; justify-content: center; background: #1a1a1a;",
+                div { style: "display: flex; flex-direction: column; align-items: center; gap: 1rem;",
+                    div { style: "width: 3rem; height: 3rem; border: 4px solid rgba(255, 255, 255, 0.2); border-top-color: rgba(255, 255, 255, 0.9); border-radius: 50%; animation: spin 1s linear infinite;" }
+                    div { style: "font-size: 0.875rem; font-weight: 500; color: rgba(255, 255, 255, 0.7);",
                         "Loading..."
                     }
                 }

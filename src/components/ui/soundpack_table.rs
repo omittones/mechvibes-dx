@@ -1,4 +1,4 @@
-use crate::libs::audio::load_soundpack;
+use crate::libs::audio::load_soundpack_from_config;
 use crate::libs::soundpack::cache::SoundpackMetadata;
 use crate::libs::soundpack::cache::SoundpackRef;
 use crate::state::app::use_state_trigger;
@@ -118,7 +118,7 @@ pub fn SoundpackTable(
                 log::debug!("🔄 Refreshing soundpack cache...");
 
                 // Reload soundpacks in audio context
-                let _ = load_soundpack(&audio_ctx, true);
+                let _ = load_soundpack_from_config(&audio_ctx, true);
 
                 // Trigger state update to refresh UI
                 state_trigger.call(());
@@ -130,58 +130,58 @@ pub fn SoundpackTable(
     };
 
     rsx! {
-      div { class: "space-y-4",
-        // Search field
-        div { class: "flex items-center px-3 gap-2",
-          input {
-            class: "input input-sm w-full",
-            placeholder: "Search {soundpack_type.to_lowercase()} sound packs...",
-            value: "{search_query}",
-            oninput: move |evt| search_query.set(evt.value()),
-          }
-          button {
-            class: "btn btn-sm btn-ghost",
-            disabled: refreshing_soundpacks(),
-            onclick: refresh_soundpacks_cache,
-            title: "Refresh sound pack list",
-            if refreshing_soundpacks() {
-              span { class: "loading loading-spinner loading-xs" }
-            } else {
-              RefreshCw { class: "w-4 h-4" }
-            }
-          }
-          if let Some(add_handler) = on_add_click {
-            button {
-              class: "btn btn-sm btn-neutral",
-              onclick: move |evt| add_handler.call(evt),
-              Plus { class: "w-4 h-4 mr-2" }
-              "Add"
-            }
-          }
-        }
-        if soundpacks.is_empty() {
-          div { class: "p-4 text-center text-sm text-base-content/70",
-            "No {soundpack_type} sound pack found. You can add new sound packs by clicking the 'Add' button above."
-          }
-        } else {
-          // Table
-          div { class: "overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)] -mb-1",
-            if filtered_soundpacks.is_empty() {
-              div { class: "p-4 text-center text-sm text-base-content/70",
-                "No result match your search!"
-              }
-            } else {
-              table { class: "table table-sm w-full",
-                tbody {
-                  for pack in filtered_soundpacks {
-                    SoundpackTableRow { soundpack: pack }
-                  }
+        div { class: "space-y-4",
+            // Search field
+            div { class: "flex items-center px-3 gap-2",
+                input {
+                    class: "input input-sm w-full",
+                    placeholder: "Search {soundpack_type.to_lowercase()} sound packs...",
+                    value: "{search_query}",
+                    oninput: move |evt| search_query.set(evt.value()),
                 }
-              }
+                button {
+                    class: "btn btn-sm btn-ghost",
+                    disabled: refreshing_soundpacks(),
+                    onclick: refresh_soundpacks_cache,
+                    title: "Refresh sound pack list",
+                    if refreshing_soundpacks() {
+                        span { class: "loading loading-spinner loading-xs" }
+                    } else {
+                        RefreshCw { class: "w-4 h-4" }
+                    }
+                }
+                if let Some(add_handler) = on_add_click {
+                    button {
+                        class: "btn btn-sm btn-neutral",
+                        onclick: move |evt| add_handler.call(evt),
+                        Plus { class: "w-4 h-4 mr-2" }
+                        "Add"
+                    }
+                }
             }
-          }
+            if soundpacks.is_empty() {
+                div { class: "p-4 text-center text-sm text-base-content/70",
+                    "No {soundpack_type} sound pack found. You can add new sound packs by clicking the 'Add' button above."
+                }
+            } else {
+                // Table
+                div { class: "overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)] -mb-1",
+                    if filtered_soundpacks.is_empty() {
+                        div { class: "p-4 text-center text-sm text-base-content/70",
+                            "No result match your search!"
+                        }
+                    } else {
+                        table { class: "table table-sm w-full",
+                            tbody {
+                                for pack in filtered_soundpacks {
+                                    SoundpackTableRow { soundpack: pack }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-      }
     }
 }
 
@@ -242,70 +242,70 @@ pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
     };
 
     rsx! {
-      tr { class: "hover:bg-base-100",
-        td { class: "flex items-center gap-4",
-          // Icon
-          div { class: "flex items-center justify-center",
-            if let Some(icon) = &soundpack.icon {
-              if !icon.is_empty() {
-                div { class: "w-8 h-8 rounded-box overflow-hidden",
-                  img {
-                    class: "w-full h-full object-cover",
-                    src: "{icon}",
-                    alt: "{soundpack.name}",
-                  }
+        tr { class: "hover:bg-base-100",
+            td { class: "flex items-center gap-4",
+                // Icon
+                div { class: "flex items-center justify-center",
+                    if let Some(icon) = &soundpack.icon {
+                        if !icon.is_empty() {
+                            div { class: "w-8 h-8 rounded-box overflow-hidden",
+                                img {
+                                    class: "w-full h-full object-cover",
+                                    src: "{icon}",
+                                    alt: "{soundpack.name}",
+                                }
+                            }
+                        } else {
+                            div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
+                                Music { class: "w-4 h-4 text-base-content/40" }
+                            }
+                        }
+                    } else {
+                        div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
+                            Music { class: "w-4 h-4 text-base-content/40" }
+                        }
+                    }
                 }
-              } else {
-                div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
-                  Music { class: "w-4 h-4 text-base-content/40" }
+                // Name
+                div {
+                    div { class: "font-medium text-sm text-base-content line-clamp-1",
+                        "{soundpack.name}"
+                    }
+                    if let Some(author) = &soundpack.author {
+                        div { class: "text-xs text-base-content/50", "by {author}" }
+                    }
                 }
-              }
-            } else {
-              div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
-                Music { class: "w-4 h-4 text-base-content/40" }
-              }
             }
-          }
-          // Name
-          div {
-            div { class: "font-medium text-sm text-base-content line-clamp-1",
-              "{soundpack.name}"
+            // Actions
+            td {
+                div { class: "flex items-center justify-end gap-1",
+                    button {
+                        class: "btn btn-soft btn-xs",
+                        title: "Open soundpack folder",
+                        onclick: on_open_folder_click,
+                        FolderOpen { class: "w-4 h-4" }
+                    }
+                    button {
+                        class: "btn btn-soft btn-error btn-xs",
+                        title: "Delete this soundpack",
+                        onclick: move |_| {
+                            eval(
+                                &format!(
+                                    "document.getElementById(\"confirm_delete_modal_{}\").showModal()",
+                                    soundpack.id,
+                                ),
+                            );
+                        },
+                        Trash { class: "w-4 h-4" }
+                    }
+                }
             }
-            if let Some(author) = &soundpack.author {
-              div { class: "text-xs text-base-content/50", "by {author}" }
-            }
-          }
         }
-        // Actions
-        td {
-          div { class: "flex items-center justify-end gap-1",
-            button {
-              class: "btn btn-soft btn-xs",
-              title: "Open soundpack folder",
-              onclick: on_open_folder_click,
-              FolderOpen { class: "w-4 h-4" }
-            }
-            button {
-              class: "btn btn-soft btn-error btn-xs",
-              title: "Delete this soundpack",
-              onclick: move |_| {
-                  eval(
-                      &format!(
-                          "document.getElementById(\"confirm_delete_modal_{}\").showModal()",
-                          soundpack.id,
-                      ),
-                  );
-              },
-              Trash { class: "w-4 h-4" }
-            }
-          }
+        // Delete confirmation modal
+        ConfirmDeleteModal {
+            modal_id: format!("confirm_delete_modal_{}", soundpack.id),
+            soundpack_name: soundpack.name.clone(),
+            on_confirm: on_confirm_delete,
         }
-      }
-      // Delete confirmation modal
-      ConfirmDeleteModal {
-        modal_id: format!("confirm_delete_modal_{}", soundpack.id),
-        soundpack_name: soundpack.name.clone(),
-        on_confirm: on_confirm_delete,
-      }
     }
 }

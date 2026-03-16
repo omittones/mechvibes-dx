@@ -1,7 +1,7 @@
 // Global tray service for coordinating tray menu updates across the application
 use once_cell::sync::Lazy;
-use std::sync::mpsc::{ self, Receiver, Sender };
 use std::sync::Mutex;
+use std::sync::mpsc::{self, Receiver, Sender};
 
 #[derive(Debug, Clone)]
 pub enum TrayUpdateMessage {
@@ -31,7 +31,11 @@ impl TrayUpdateService {
 
     /// Try to receive tray update messages (non-blocking)
     pub fn try_receive(&self) -> Option<TrayUpdateMessage> {
-        if let Ok(receiver) = self.receiver.lock() { receiver.try_recv().ok() } else { None }
+        if let Ok(receiver) = self.receiver.lock() {
+            receiver.try_recv().ok()
+        } else {
+            None
+        }
     }
 }
 

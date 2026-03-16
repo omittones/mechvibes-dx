@@ -32,8 +32,7 @@ pub struct CollapseProps {
 pub fn Collapse(props: CollapseProps) -> Element {
     let container_class = format!(
         "collapse relative w-full collapse-arrow {} {}",
-        props.variant,
-        props.class
+        props.variant, props.class
     );
 
     rsx! {
@@ -51,9 +50,7 @@ pub fn Collapse(props: CollapseProps) -> Element {
                     }
                 }
             }
-            div { class: "{props.content_class}",
-                {props.children}
-            }
+            div { class: "{props.content_class}", {props.children} }
         }
     }
 }

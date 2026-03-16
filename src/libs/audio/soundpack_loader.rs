@@ -8,7 +8,10 @@ use crate::state::config::AppConfig;
 /// Reload the current soundpacks from configuration.
 /// If a soundpack fails to load, clear its selection and optionally save config.
 /// Returns Ok(()) if succeeded, Err if any selected soundpack fails to load (after clear/reset).
-pub fn load_soundpack(audio_ctx: &AudioContext, update_config: bool) -> Result<(), String> {
+pub fn load_soundpack_from_config(
+    audio_ctx: &AudioContext,
+    update_config: bool,
+) -> Result<(), String> {
     let mut config = AppConfig::load();
     let mut config_changed = false;
     let mut last_err: Option<String> = None;
@@ -16,20 +19,18 @@ pub fn load_soundpack(audio_ctx: &AudioContext, update_config: bool) -> Result<(
     // Load keyboard soundpack
     if !config.keyboard_soundpack.is_empty() {
         match SoundpackRef::parse(&config.keyboard_soundpack)
-            .ok()
-            .and_then(|id| load_soundpack_file(audio_ctx, &id).ok())
+            .map(|id| load_soundpack_file(audio_ctx, &id))
         {
-            Some(_) => log::debug!(
+            Ok(_) => log::debug!(
                 "✅ Keyboard soundpack '{}' reloaded successfully",
                 config.keyboard_soundpack
             ),
-            None => {
-                let err_msg = format!(
+            Err(e) => {
+                log::error!(
                     "❌ Failed to reload keyboard soundpack '{}'. Clearing selection.",
                     config.keyboard_soundpack
                 );
-                log::error!("{}", err_msg);
-                last_err = Some(err_msg);
+                last_err = Some(e.to_string());
                 config.keyboard_soundpack = "".to_string();
                 config_changed = true;
             }
@@ -39,20 +40,18 @@ pub fn load_soundpack(audio_ctx: &AudioContext, update_config: bool) -> Result<(
     // Load mouse soundpack
     if !config.mouse_soundpack.is_empty() {
         match SoundpackRef::parse(&config.mouse_soundpack)
-            .ok()
-            .and_then(|id| load_soundpack_file(audio_ctx, &id).ok())
+            .map(|id| load_soundpack_file(audio_ctx, &id).ok())
         {
-            Some(_) => log::debug!(
+            Ok(_) => log::debug!(
                 "✅ Mouse soundpack '{}' reloaded successfully",
                 config.mouse_soundpack
             ),
-            None => {
-                let err_msg = format!(
+            Err(e) => {
+                log::error!(
                     "❌ Failed to reload mouse soundpack '{}'. Clearing selection.",
                     config.mouse_soundpack
                 );
-                log::error!("{}", err_msg);
-                last_err = Some(err_msg);
+                last_err = Some(e.to_string());
                 config.mouse_soundpack = "".to_string();
                 config_changed = true;
             }
@@ -71,6 +70,47 @@ pub fn load_soundpack(audio_ctx: &AudioContext, update_config: bool) -> Result<(
     } else {
         Ok(())
     }
+}
+
+pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<(), String> {
+    log::info!("📂 Direct loading soundpack: {}", id);
+
+    // Load soundpack directly from filesystem
+    let soundpack_dir = id.to_soundpack_path().to_string_lossy().to_string();
+
+    let (config_path, soundpack) = load_and_migrate_soundpack(&soundpack_dir)?;
+
+    // Load audio samples directly from file
+    let samples = load_audio_file(&soundpack_dir, &soundpack)?;
+
+    match id.soundpack_type {
+        SoundpackType::Mouse => {
+            let mouse_mappings = create_mouse_mappings(&soundpack, &samples.0); // Update audio context with mouse data
+            context.update_mouse_context(samples, mouse_mappings)?;
+        }
+        SoundpackType::Keyboard => {
+            let key_mappings = create_key_mappings(&soundpack, &samples.0); // Update audio context with keyboard data
+            context.update_keyboard_context(samples, key_mappings)?;
+        }
+    }
+
+    // Update metadata cache - create metadata with no error since loading succeeded
+    let mut cache = load_cache();
+    let metadata = metadata_from_soundpack(
+        &config_path,
+        &soundpack,
+        id.is_builtin,
+        id.soundpack_type == SoundpackType::Mouse,
+    );
+    cache.add_soundpack(metadata);
+    save_cache(&cache);
+
+    log::info!(
+        "✅ Successfully loaded mouse soundpack: {} (direct from files)",
+        soundpack.name
+    );
+
+    Ok(())
 }
 
 fn load_audio_file(
@@ -392,47 +432,6 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
     }
 
     Ok((samples, channels, sample_rate))
-}
-
-pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<(), String> {
-    log::info!("📂 Direct loading soundpack: {}", id);
-
-    // Load soundpack directly from filesystem
-    let soundpack_dir = id.to_soundpack_path().to_string_lossy().to_string();
-
-    let (config_path, soundpack) = load_and_migrate_soundpack(&soundpack_dir)?;
-
-    // Load audio samples directly from file
-    let samples = load_audio_file(&soundpack_dir, &soundpack)?;
-
-    match id.soundpack_type {
-        SoundpackType::Mouse => {
-            let mouse_mappings = create_mouse_mappings(&soundpack, &samples.0); // Update audio context with mouse data
-            context.update_mouse_context(samples, mouse_mappings)?;
-        }
-        SoundpackType::Keyboard => {
-            let key_mappings = create_key_mappings(&soundpack, &samples.0); // Update audio context with keyboard data
-            context.update_keyboard_context(samples, key_mappings)?;
-        }
-    }
-
-    // Update metadata cache - create metadata with no error since loading succeeded
-    let mut cache = load_cache();
-    let metadata = metadata_from_soundpack(
-        &config_path,
-        &soundpack,
-        id.is_builtin,
-        id.soundpack_type == SoundpackType::Mouse,
-    );
-    cache.add_soundpack(metadata);
-    save_cache(&cache);
-
-    log::info!(
-        "✅ Successfully loaded mouse soundpack: {} (direct from files)",
-        soundpack.name
-    );
-
-    Ok(())
 }
 
 fn create_key_mappings(
