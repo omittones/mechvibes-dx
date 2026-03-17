@@ -35,7 +35,7 @@ pub fn start_listeners(
         // Pass "always focused" state to prevent rdev from sending keyboard events
         log::debug!("🎮 Starting unified input listener for mouse events (Wayland mode)...");
         let always_focused = Arc::new(Mutex::new(true));
-        start_unified_input_listener(keyboard_tx, mouse_tx, hotkey_tx, Some(always_focused));
+        start_unified_input_listener(keyboard_tx, mouse_tx, hotkey_tx, always_focused);
     } else {
         let focus_state = get_window_focus_state();
 
@@ -44,7 +44,7 @@ pub fn start_listeners(
             keyboard_tx.clone(),
             mouse_tx,
             hotkey_tx,
-            Some(focus_state.clone()),
+            focus_state.clone(),
         );
 
         log::debug!("🎮 Starting focused keyboard listener (X11 mode - focused)...");
@@ -67,7 +67,7 @@ pub fn start_listeners(
         keyboard_tx.clone(),
         mouse_tx,
         hotkey_tx,
-        Some(focus_state.clone()),
+        focus_state.clone(),
     );
 
     log::debug!("🎮 Starting focused keyboard listener (focused)...");

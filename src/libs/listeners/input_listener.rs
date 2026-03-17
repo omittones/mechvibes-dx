@@ -165,7 +165,7 @@ pub fn start_unified_input_listener(
     keyboard_tx: channel::Sender<String>,
     mouse_tx: channel::Sender<String>,
     hotkey_tx: channel::Sender<String>,
-    is_focused: Option<Arc<Mutex<bool>>>,
+    is_focused: Arc<Mutex<bool>>,
 ) {
     log::info!("🎮 Starting unified input listener (keyboard + mouse + hotkeys)...");
 
@@ -215,10 +215,9 @@ pub fn start_unified_input_listener(
 
                         // If focus state is provided, only send keyboard events when UNFOCUSED
                         // This prevents duplicate events with the focused_input_listener
-                        if let Some(ref focus_state) = is_focused {
-                            if *focus_state.lock().unwrap() {
-                                return; // Window is focused, skip keyboard event (focused_input_listener handles it)
-                            }
+                        if *is_focused.lock().unwrap() {
+                            // Window is focused, skip keyboard event (focused_input_listener handles it)
+                            return;
                         }
 
                         // Check if key is already pressed
@@ -265,10 +264,8 @@ pub fn start_unified_input_listener(
                         }
 
                         // If focus state is provided, only send keyboard events when UNFOCUSED
-                        if let Some(ref focus_state) = is_focused {
-                            if *focus_state.lock().unwrap() {
-                                return; // Window is focused, skip keyboard event
-                            }
+                        if *is_focused.lock().unwrap() {
+                            return;
                         }
 
                         // Remove key from pressed set

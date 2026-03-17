@@ -112,7 +112,6 @@ pub fn app() -> Element {
                         if keycode.starts_with("UP:") {
                             let key = &keycode[3..];
                             ctx.play_key_event_sound(key, false);
-
                             keyboard_state.write().key_pressed = false;
                         } else if !keycode.is_empty() {
                             ctx.play_key_event_sound(&keycode, true);

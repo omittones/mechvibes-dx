@@ -10,6 +10,10 @@ impl AudioContext {
         // Check enable_sound from config before playing audio
         let config = AppConfig::load();
         if !config.enable_sound || !config.enable_keyboard_sound {
+            log::debug!(
+                "🔇 Sound disabled, skipping key event sound for key '{}'",
+                key
+            );
             return;
         }
 
@@ -25,7 +29,9 @@ impl AudioContext {
             }
             pressed.insert(key.to_string(), false);
         }
-        drop(pressed); // Get timestamp and end time
+        drop(pressed);
+
+        // Get timestamp and end time
         let key_map = self.key_map.lock().unwrap();
         let (start, end) = match key_map.get(key) {
             Some(arr) if arr.len() == 2 => {
@@ -37,7 +43,7 @@ impl AudioContext {
 
                 // Debug logging for problematic keys
                 if start < 0.0 || duration <= 0.0 || duration > 10000.0 {
-                    log::error!(
+                    log::warn!(
                         "⚠️ Suspicious mapping for key '{}' ({}): start={:.3}ms, end={:.3}ms, duration={:.3}ms (raw: [{}, {}])",
                         key,
                         if is_keydown { "down" } else { "up" },
@@ -63,7 +69,7 @@ impl AudioContext {
 
                 // Debug logging for problematic keys
                 if start < 0.0 || duration <= 0.0 || duration > 10000.0 {
-                    log::error!(
+                    log::warn!(
                         "⚠️ Suspicious mapping for key '{}': start={:.3}ms, end={:.3}ms, duration={:.3}ms (raw: [{}, {}])",
                         key,
                         start,
@@ -78,14 +84,14 @@ impl AudioContext {
             }
             Some(arr) => {
                 log::error!(
-                    "Invalid mapping for key '{}': expected 1-2 elements, got {}",
+                    "❌ Invalid mapping for key '{}': expected 1-2 elements, got {}",
                     key,
                     arr.len()
                 );
                 return;
             }
             None => {
-                // Silently ignore unmapped keys to reduce noise
+                log::debug!("🔍 Ignoring unmapped key '{}'", key);
                 return;
             }
         };
@@ -93,7 +99,15 @@ impl AudioContext {
 
         self.play_sound_segment(key, start, end, is_keydown);
     }
+
     fn play_sound_segment(&self, key: &str, start: f32, end: f32, is_keydown: bool) {
+        log::debug!(
+            "Playing sound for key '{}': start={:.3}ms, end={:.3}ms",
+            key,
+            start,
+            end,
+        );
+
         let pcm_opt = self.keyboard_samples.lock().unwrap().clone();
         if let Some((samples, channels, sample_rate)) = pcm_opt {
             // Calculate total audio duration in milliseconds

@@ -89,15 +89,15 @@ pub fn start_evdev_keyboard_listener(
                                                 // Check for Ctrl+Alt+M hotkey combination
                                                 if ctrl_pressed && alt_pressed {
                                                     log::info!(
-                                                        "🔥 [evdev] Hotkey detected: Ctrl+Alt+M - Toggling global sound"
+                                                        "🔥 Hotkey detected: Ctrl+Alt+M - Toggling global sound"
                                                     );
                                                     match hotkey_tx.send("TOGGLE_SOUND".to_string())
                                                     {
                                                         Ok(()) => log::debug!(
-                                                            "[evdev] Hotkey event sent successfully"
+                                                            "Hotkey event sent successfully"
                                                         ),
                                                         Err(e) => log::error!(
-                                                            "[evdev] Failed to send hotkey event: {}",
+                                                            "Failed to send hotkey event: {}",
                                                             e
                                                         ),
                                                     }
@@ -109,12 +109,11 @@ pub fn start_evdev_keyboard_listener(
 
                                         // Send key press event
                                         match keyboard_tx.send(key_code.to_string()) {
-                                            Ok(()) => log::debug!(
-                                                "[evdev] Key press detected: {}",
-                                                key_code
-                                            ),
+                                            Ok(()) => {
+                                                log::debug!("Key press detected: {}", key_code)
+                                            }
                                             Err(e) => log::error!(
-                                                "[evdev] Failed to send key press '{}': {}",
+                                                "Failed to send key press '{}': {}",
                                                 key_code,
                                                 e
                                             ),

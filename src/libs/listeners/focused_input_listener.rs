@@ -143,7 +143,7 @@ pub fn start_focused_keyboard_listener(
             // Log focus state every 5 seconds for debugging
             if last_focus_log.elapsed().as_secs() >= 5 {
                 log::debug!(
-                    "🔍 [device_query] Focus state: {}, polling active: {}",
+                    "🔍 Focus state: {}, polling active: {}",
                     if focused { "FOCUSED" } else { "UNFOCUSED" },
                     focused
                 );
@@ -160,15 +160,11 @@ pub fn start_focused_keyboard_listener(
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
                         match keyboard_tx.send(key_code.to_string()) {
-                            Ok(()) => log::debug!("[focused] Key press detected: {}", key_code),
-                            Err(e) => log::error!(
-                                "[focused] Failed to send key press '{}': {}",
-                                key_code,
-                                e
-                            ),
+                            Ok(()) => log::debug!("Key press detected: {}", key_code),
+                            Err(e) => log::error!("Failed to send key press '{}': {}", key_code, e),
                         }
                     } else {
-                        log::debug!("[focused] Ignored unmapped key press: {:?}", key);
+                        log::debug!("Ignored unmapped key press: {:?}", key);
                     }
                 }
 
@@ -177,15 +173,13 @@ pub fn start_focused_keyboard_listener(
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
                         match keyboard_tx.send(format!("UP:{}", key_code)) {
-                            Ok(()) => log::debug!("[focused] Key release detected: {}", key_code),
-                            Err(e) => log::error!(
-                                "[focused] Failed to send key release '{}': {}",
-                                key_code,
-                                e
-                            ),
+                            Ok(()) => log::debug!("Key release detected: {}", key_code),
+                            Err(e) => {
+                                log::error!("Failed to send key release '{}': {}", key_code, e)
+                            }
                         }
                     } else {
-                        log::debug!("[focused] Ignored unmapped key release: {:?}", key);
+                        log::debug!("Ignored unmapped key release: {:?}", key);
                     }
                 }
 
