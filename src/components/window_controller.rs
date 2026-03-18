@@ -1,37 +1,37 @@
-use crate::libs::tray::{TrayManager, TrayMessage, handle_tray_events};
+use crate::libs::tray::{TrayManager, TrayMessage, handle_tray_events, handle_tray_icon_click};
 use crate::libs::tray_service::TRAY_UPDATE_SERVICE;
 use crate::libs::window_manager::{WINDOW_MANAGER, WindowAction};
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use std::sync::mpsc;
 
+fn init_tray_manager() -> Option<TrayManager> {
+    match TrayManager::new() {
+        Ok(tray) => {
+            log::debug!("✅ System tray initialized successfully");
+            Some(tray)
+        }
+
+        Err(e) => {
+            log::error!("❌ Failed to initialize system tray: {}", e);
+            None
+        }
+    }
+}
+
 #[component]
 pub fn WindowController() -> Element {
     let window = use_window();
 
     // Create a static receiver for window actions
-    let mut window_action_receiver = use_signal(|| None::<mpsc::Receiver<WindowAction>>); // Create a signal to hold the tray manager
-    let mut tray_manager = use_signal(|| None::<TrayManager>);
-
-    // Initialize the receiver once using use_resource to avoid reactive loops
-    let _window_channel = use_resource(move || async move {
+    let window_action_receiver = use_signal(|| {
         let (tx, rx) = mpsc::channel::<WindowAction>();
         WINDOW_MANAGER.set_action_sender(tx);
-        window_action_receiver.set(Some(rx));
+        Some(rx)
     });
 
-    // Initialize tray using use_resource to avoid reactive scope warnings
-    let _tray_init = use_resource(move || async move {
-        match TrayManager::new() {
-            Ok(tray) => {
-                log::debug!("✅ System tray initialized successfully");
-                tray_manager.set(Some(tray));
-            }
-            Err(e) => {
-                log::error!("❌ Failed to initialize system tray: {}", e);
-            }
-        }
-    });
+    // Create a signal to hold the tray manager
+    let tray_manager = use_signal(init_tray_manager);
 
     // Use effect to listen for both window actions and tray events
     use_effect(move || {
@@ -58,6 +58,7 @@ pub fn WindowController() -> Element {
                         }
                     }
                 }
+
                 // Handle tray update requests from other parts of the application
                 if let Some(_) = TRAY_UPDATE_SERVICE.try_receive() {
                     tray_manager_clone.with_mut(|tray_opt| {
@@ -74,7 +75,22 @@ pub fn WindowController() -> Element {
                     });
                 }
 
-                // Handle tray events
+                // Handle tray icon double-click (show/focus only if not already focused)
+                if let Some(TrayMessage::Show) = handle_tray_icon_click() {
+                    let is_visible = WINDOW_MANAGER
+                        .is_visible
+                        .lock()
+                        .map(|v| *v)
+                        .unwrap_or(false);
+                    if !is_visible {
+                        window_clone.set_visible(true);
+                        window_clone.set_focus();
+                        WINDOW_MANAGER.set_visible(true);
+                        log::debug!("🔼 Window shown from tray double-click");
+                    }
+                }
+
+                // Handle tray menu events
                 if let Some(tray_message) = handle_tray_events() {
                     match tray_message {
                         TrayMessage::Show => {

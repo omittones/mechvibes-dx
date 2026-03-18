@@ -1,6 +1,8 @@
 use crate::utils::constants::APP_NAME;
+use std::sync::Mutex;
+use std::time::Instant;
 use tray_icon::{
-    Icon, TrayIcon, TrayIconBuilder,
+    Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
     menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem},
 };
 
@@ -156,6 +158,31 @@ impl TrayManager {
     }
 }
 
+static LAST_LEFT_CLICK: Mutex<Option<Instant>> = Mutex::new(None);
+const DOUBLE_CLICK_INTERVAL_MS: u128 = 500;
+
+pub fn handle_tray_icon_click() -> Option<TrayMessage> {
+    if let Ok(event) = TrayIconEvent::receiver().try_recv() {
+        if let TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+        } = event
+        {
+            let mut last = LAST_LEFT_CLICK.lock().unwrap();
+            let now = Instant::now();
+            if let Some(prev) = *last {
+                if now.duration_since(prev).as_millis() < DOUBLE_CLICK_INTERVAL_MS {
+                    *last = None;
+                    return Some(TrayMessage::Show);
+                }
+            }
+            *last = Some(now);
+        }
+    }
+    None
+}
+
 pub fn handle_tray_events() -> Option<TrayMessage> {
     // Handle menu events
     if let Ok(event) = MenuEvent::receiver().try_recv() {
@@ -182,7 +209,7 @@ pub fn handle_tray_events() -> Option<TrayMessage> {
                 return Some(TrayMessage::OpenWebsite);
             }
             "exit" => {
-                log::error!("❌ Tray menu: Exit clicked");
+                log::info!("❌ Tray menu: Exit clicked");
                 return Some(TrayMessage::Exit);
             }
             _ => {
