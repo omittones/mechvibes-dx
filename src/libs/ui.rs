@@ -1,7 +1,7 @@
 use crate::components::header::Header;
 use crate::components::window_controller::WindowController;
 use crate::libs::AudioContext;
-use crate::libs::audio::load_soundpack_from_config;
+use crate::libs::audio::{load_soundpack_from_config, start_sound_processor};
 use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
 use crate::libs::soundpack::cache::{SoundpackRef, SoundpackType};
@@ -33,7 +33,7 @@ pub fn app() -> Element {
     use_context_provider(|| update_signal);
 
     // Create global keyboard state using signals
-    let keyboard_state = use_signal(|| KeyboardState::new());
+    let mut keyboard_state = use_signal(|| KeyboardState::new());
 
     // Provide the keyboard state context to all child components
     use_context_provider(|| keyboard_state);
@@ -70,14 +70,21 @@ pub fn app() -> Element {
     });
 
     let input_channels = get_input_channels();
-
-    let keyboard_rx = &input_channels.keyboard_rx;
-    let mouse_rx = &input_channels.mouse_rx;
     let hotkey_rx = &input_channels.hotkey_rx;
 
+    // ===== SOUND PROCESSOR (UI-independent threads) =====
+    // Spawn dedicated threads that do blocking recv() on the input channels and
+    // play sounds immediately, decoupled from the Dioxus async runtime.
+    // Keyboard events are forwarded to ui_channels for UI state updates only.
+    let ui_channels = use_hook(|| {
+        start_sound_processor(
+            audio_context.clone(),
+            input_channels.keyboard_rx.clone(),
+            input_channels.mouse_rx.clone(),
+        )
+    });
+
     // ===== WINDOW FOCUS TRACKING =====
-    // Track window focus state to switch between rdev (unfocused) and device_query (focused)
-    // This is a hybrid approach to work around the rdev + Wry/Winit incompatibility on Windows
     {
         use dioxus::desktop::tao::event::WindowEvent;
 
@@ -87,62 +94,30 @@ pub fn app() -> Element {
                 ..
             } = event
             {
-                // Check for focus events using proper pattern matching
                 if let WindowEvent::Focused(focused) = window_event {
-                    // Update global focus state
                     set_window_focus(*focused);
                 }
             }
         });
     }
 
-    // Process keyboard events and update both audio and UI state
+    // Update keyboard UI state from events forwarded by the sound processor.
+    // Sound has already been played on the dedicated thread by this point.
     {
-        let ctx = audio_context.clone();
-        let keyboard_rx = keyboard_rx.clone();
-        let mut keyboard_state = keyboard_state;
+        let ui_keyboard_rx = ui_channels.keyboard_rx.clone();
 
         use_future(move || {
-            let ctx = ctx.clone();
-            let keyboard_rx = keyboard_rx.clone();
+            let ui_keyboard_rx = ui_keyboard_rx.clone();
 
             async move {
                 loop {
-                    if let Ok(keycode) = keyboard_rx.try_recv() {
+                    if let Ok(keycode) = ui_keyboard_rx.try_recv() {
                         if keycode.starts_with("UP:") {
-                            let key = &keycode[3..];
-                            ctx.play_key_event_sound(key, false);
                             keyboard_state.write().key_pressed = false;
                         } else if !keycode.is_empty() {
-                            ctx.play_key_event_sound(&keycode, true);
                             let mut state = keyboard_state.write();
                             state.key_pressed = true;
-                            state.last_key = keycode.clone();
-                        }
-                    }
-                    delay::Delay::key_event().await;
-                }
-            }
-        });
-    }
-
-    // Process mouse events and play sounds
-    {
-        let ctx = audio_context.clone();
-        let mouse_rx = mouse_rx.clone();
-
-        use_future(move || {
-            let ctx = ctx.clone();
-            let mouse_rx = mouse_rx.clone();
-
-            async move {
-                loop {
-                    if let Ok(button_code) = mouse_rx.try_recv() {
-                        if button_code.starts_with("UP:") {
-                            let button = &button_code[3..];
-                            ctx.play_mouse_event_sound(button, false);
-                        } else if !button_code.is_empty() {
-                            ctx.play_mouse_event_sound(&button_code, true);
+                            state.last_key = keycode;
                         }
                     }
                     delay::Delay::key_event().await;

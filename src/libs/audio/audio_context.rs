@@ -27,7 +27,12 @@ pub struct AudioContext {
     pub(crate) last_mouse_sound_time: Arc<Mutex<Option<Instant>>>,
 }
 
-// Manual PartialEq implementation for component compatibility
+// Safety: OutputStream contains a cpal::Stream with a raw pointer kept alive purely for RAII.
+// All cross-thread state (samples, key maps, sinks) is behind Arc<Mutex<...>>, and
+// OutputStreamHandle is internally Arc-based. We never access _stream across threads.
+unsafe impl Send for AudioContext {}
+unsafe impl Sync for AudioContext {}
+
 impl PartialEq for AudioContext {
     fn eq(&self, other: &Self) -> bool {
         // For component props, we consider AudioContext instances equal if they're the same Arc
