@@ -9,7 +9,7 @@ mod utils;
 use crossbeam_channel as channel;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
-use libs::input_manager::{init_input_channels, init_window_focus_state_with_value};
+use libs::input_manager::{InputEvent, init_input_channels, init_window_focus_state_with_value};
 use libs::start_listeners;
 use libs::ui;
 use libs::window_manager::{WINDOW_MANAGER, WindowAction};
@@ -121,8 +121,8 @@ fn main() {
     // to ensure proper Dioxus runtime context
 
     // Create input event channels for communication between input listener and UI
-    let (keyboard_tx, keyboard_rx) = channel::unbounded::<String>();
-    let (mouse_tx, mouse_rx) = channel::unbounded::<String>();
+    let (keyboard_tx, keyboard_rx) = channel::unbounded::<InputEvent>();
+    let (mouse_tx, mouse_rx) = channel::unbounded::<InputEvent>();
     let (hotkey_tx, hotkey_rx) = channel::unbounded::<String>();
 
     // Initialize global input channels for UI to access (including senders for window events)

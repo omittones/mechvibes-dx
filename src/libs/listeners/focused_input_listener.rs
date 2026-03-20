@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::libs::input_manager::InputEvent;
+
 /// Maps device_query Keycode to our standardized key code format (same as rdev)
 fn map_device_query_keycode(key: Keycode) -> &'static str {
     match key {
@@ -125,7 +127,7 @@ fn map_device_query_keycode(key: Keycode) -> &'static str {
 /// Start the focused keyboard listener (uses device_query polling)
 /// This listener is ONLY active when the window is focused
 pub fn start_focused_keyboard_listener(
-    keyboard_tx: channel::Sender<String>,
+    keyboard_tx: channel::Sender<InputEvent>,
     is_focused: Arc<Mutex<bool>>,
 ) {
     thread::spawn(move || {
@@ -159,7 +161,8 @@ pub fn start_focused_keyboard_listener(
                 for key in current_keys.difference(&prev_keys) {
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
-                        match keyboard_tx.send(key_code.to_string()) {
+                        let event = InputEvent { code: key_code.to_string(), is_down: true };
+                        match keyboard_tx.send(event) {
                             Ok(()) => log::debug!("Key press detected: {}", key_code),
                             Err(e) => log::error!("Failed to send key press '{}': {}", key_code, e),
                         }
@@ -172,7 +175,8 @@ pub fn start_focused_keyboard_listener(
                 for key in prev_keys.difference(&current_keys) {
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
-                        match keyboard_tx.send(format!("UP:{}", key_code)) {
+                        let event = InputEvent { code: key_code.to_string(), is_down: false };
+                        match keyboard_tx.send(event) {
                             Ok(()) => log::debug!("Key release detected: {}", key_code),
                             Err(e) => {
                                 log::error!("Failed to send key release '{}': {}", key_code, e)

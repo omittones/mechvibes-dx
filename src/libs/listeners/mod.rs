@@ -3,7 +3,7 @@ use crossbeam_channel as channel;
 mod focused_input_listener;
 mod input_listener;
 
-use crate::libs::input_manager::get_window_focus_state;
+use crate::libs::input_manager::{InputEvent, get_window_focus_state};
 use focused_input_listener::start_focused_keyboard_listener;
 use input_listener::start_unified_input_listener;
 
@@ -13,8 +13,8 @@ mod evdev_input_listener;
 // Start input listeners based on platform and display server
 #[cfg(target_os = "linux")]
 pub fn start_listeners(
-    keyboard_tx: channel::Sender<String>,
-    mouse_tx: channel::Sender<String>,
+    keyboard_tx: channel::Sender<InputEvent>,
+    mouse_tx: channel::Sender<InputEvent>,
     hotkey_tx: channel::Sender<String>,
 ) {
     use evdev_input_listener::start_evdev_keyboard_listener;
@@ -54,8 +54,8 @@ pub fn start_listeners(
 
 #[cfg(not(target_os = "linux"))]
 pub fn start_listeners(
-    keyboard_tx: channel::Sender<String>,
-    mouse_tx: channel::Sender<String>,
+    keyboard_tx: channel::Sender<InputEvent>,
+    mouse_tx: channel::Sender<InputEvent>,
     hotkey_tx: channel::Sender<String>,
 ) {
     log::debug!("🎮 Starting listeners (Windows/macOS mode)...");

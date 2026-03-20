@@ -3,11 +3,12 @@ use std::sync::Arc;
 use std::thread;
 
 use super::audio_context::AudioContext;
+use crate::libs::input_manager::InputEvent;
 
 /// Channels forwarded to the UI for state updates only (no sound playback).
 #[derive(Clone)]
 pub struct UiEventChannels {
-    pub keyboard_rx: channel::Receiver<String>,
+    pub keyboard_rx: channel::Receiver<InputEvent>,
 }
 
 /// Spawns dedicated threads that play sounds on blocking `recv()`, eliminating
@@ -18,13 +19,13 @@ pub struct UiEventChannels {
 /// they are consumed entirely on the sound thread.
 pub fn start_sound_processor(
     audio_ctx: Arc<AudioContext>,
-    keyboard_rx: channel::Receiver<String>,
-    mouse_rx: channel::Receiver<String>,
+    keyboard_rx: channel::Receiver<InputEvent>,
+    mouse_rx: channel::Receiver<InputEvent>,
 ) -> UiEventChannels {
-    let (ui_keyboard_tx, ui_keyboard_rx) = channel::unbounded::<String>();
+    let (ui_keyboard_tx, ui_keyboard_rx) = channel::unbounded::<InputEvent>();
 
     // Keyboard sound thread — blocks until an event arrives, plays immediately,
-    // then forwards the event string to the UI channel.
+    // then forwards the event to the UI channel.
     {
         let ctx = audio_ctx.clone();
         thread::Builder::new()
@@ -33,13 +34,9 @@ pub fn start_sound_processor(
                 log::info!("🎹 Keyboard sound processor thread started");
                 loop {
                     match keyboard_rx.recv() {
-                        Ok(keycode) => {
-                            if keycode.starts_with("UP:") {
-                                ctx.play_key_event_sound(&keycode[3..], false);
-                            } else if !keycode.is_empty() {
-                                ctx.play_key_event_sound(&keycode, true);
-                            }
-                            let _ = ui_keyboard_tx.send(keycode);
+                        Ok(event) => {
+                            ctx.play_key_event_sound(&event.code, event.is_down);
+                            let _ = ui_keyboard_tx.send(event);
                         }
                         Err(_) => break,
                     }
@@ -59,12 +56,8 @@ pub fn start_sound_processor(
                 log::info!("🖱️ Mouse sound processor thread started");
                 loop {
                     match mouse_rx.recv() {
-                        Ok(button_code) => {
-                            if button_code.starts_with("UP:") {
-                                ctx.play_mouse_event_sound(&button_code[3..], false);
-                            } else if !button_code.is_empty() {
-                                ctx.play_mouse_event_sound(&button_code, true);
-                            }
+                        Ok(event) => {
+                            ctx.play_mouse_event_sound(&event.code, event.is_down);
                         }
                         Err(_) => break,
                     }

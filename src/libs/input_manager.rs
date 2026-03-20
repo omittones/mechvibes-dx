@@ -2,6 +2,13 @@
 use crossbeam_channel as channel;
 use std::sync::{Arc, Mutex, OnceLock};
 
+/// A single keyboard or mouse event flowing through the input channels.
+#[derive(Clone, Debug)]
+pub struct InputEvent {
+    pub code: String,
+    pub is_down: bool,
+}
+
 /// Static global holder for input channels
 static INPUT_CHANNELS: OnceLock<InputChannels> = OnceLock::new();
 
@@ -10,15 +17,15 @@ static WINDOW_FOCUS_STATE: OnceLock<Arc<Mutex<bool>>> = OnceLock::new();
 
 /// Struct to hold input event channels
 pub struct InputChannels {
-    pub keyboard_rx: channel::Receiver<String>,
-    pub mouse_rx: channel::Receiver<String>,
+    pub keyboard_rx: channel::Receiver<InputEvent>,
+    pub mouse_rx: channel::Receiver<InputEvent>,
     pub hotkey_rx: channel::Receiver<String>,
 }
 
 /// Initialize input channels (called from main)
 pub fn init_input_channels(
-    keyboard_rx: channel::Receiver<String>,
-    mouse_rx: channel::Receiver<String>,
+    keyboard_rx: channel::Receiver<InputEvent>,
+    mouse_rx: channel::Receiver<InputEvent>,
     hotkey_rx: channel::Receiver<String>,
 ) {
     let channels = InputChannels {

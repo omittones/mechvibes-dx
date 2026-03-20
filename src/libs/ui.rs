@@ -111,13 +111,13 @@ pub fn app() -> Element {
 
             async move {
                 loop {
-                    if let Ok(keycode) = ui_keyboard_rx.try_recv() {
-                        if keycode.starts_with("UP:") {
-                            keyboard_state.write().key_pressed = false;
-                        } else if !keycode.is_empty() {
+                    if let Ok(event) = ui_keyboard_rx.try_recv() {
+                        if event.is_down {
                             let mut state = keyboard_state.write();
                             state.key_pressed = true;
-                            state.last_key = keycode;
+                            state.last_key = event.code;
+                        } else {
+                            keyboard_state.write().key_pressed = false;
                         }
                     }
                     delay::Delay::key_event().await;

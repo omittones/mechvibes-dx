@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::libs::input_manager::InputEvent;
+
 // Maps a keyboard key to its standardized code
 fn map_key_to_code(key: Key) -> &'static str {
     match key {
@@ -162,8 +164,8 @@ fn map_button_to_code(button: Button) -> &'static str {
 /// When is_focused is provided, keyboard events are only sent when the window is UNFOCUSED
 /// to avoid duplicate events with the focused_input_listener
 pub fn start_unified_input_listener(
-    keyboard_tx: channel::Sender<String>,
-    mouse_tx: channel::Sender<String>,
+    keyboard_tx: channel::Sender<InputEvent>,
+    mouse_tx: channel::Sender<InputEvent>,
     hotkey_tx: channel::Sender<String>,
     is_focused: Arc<Mutex<bool>>,
 ) {
@@ -238,7 +240,8 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            match keyboard_tx.send(key_code.to_string()) {
+                            let event = InputEvent { code: key_code.to_string(), is_down: true };
+                            match keyboard_tx.send(event) {
                                 Ok(()) => log::debug!("Key press detected: {}", key_code),
                                 Err(e) => {
                                     log::error!("Failed to send key press '{}': {}", key_code, e)
@@ -273,7 +276,8 @@ pub fn start_unified_input_listener(
                         pressed.remove(&key_code.to_string());
                         drop(pressed);
 
-                        match keyboard_tx.send(format!("UP:{}", key_code)) {
+                        let event = InputEvent { code: key_code.to_string(), is_down: false };
+                        match keyboard_tx.send(event) {
                             Ok(()) => log::debug!("Key release detected: {}", key_code),
                             Err(e) => {
                                 log::error!("Failed to send key release '{}': {}", key_code, e)
@@ -315,7 +319,8 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            match mouse_tx.send(button_code.to_string()) {
+                            let event = InputEvent { code: button_code.to_string(), is_down: true };
+                            match mouse_tx.send(event) {
                                 Ok(()) => log::debug!("Mouse press detected: {}", button_code),
                                 Err(e) => log::error!(
                                     "Failed to send mouse press '{}': {}",
@@ -338,7 +343,8 @@ pub fn start_unified_input_listener(
                         pressed.remove(&button_code.to_string());
                         drop(pressed);
 
-                        match mouse_tx.send(format!("UP:{}", button_code)) {
+                        let event = InputEvent { code: button_code.to_string(), is_down: false };
+                        match mouse_tx.send(event) {
                             Ok(()) => log::debug!("Mouse release detected: {}", button_code),
                             Err(e) => {
                                 log::error!("Failed to send mouse release '{}': {}", button_code, e)

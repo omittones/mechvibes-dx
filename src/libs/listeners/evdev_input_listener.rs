@@ -3,9 +3,11 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::libs::input_manager::InputEvent;
+
 #[cfg(target_os = "linux")]
 pub fn start_evdev_keyboard_listener(
-    keyboard_tx: channel::Sender<String>,
+    keyboard_tx: channel::Sender<InputEvent>,
     hotkey_tx: channel::Sender<String>,
     _is_focused: Arc<Mutex<bool>>,
 ) {
@@ -104,7 +106,8 @@ pub fn start_evdev_keyboard_listener(
                                         }
 
                                         // Send key press event
-                                        match keyboard_tx.send(key_code.to_string()) {
+                                        let event = InputEvent { code: key_code.to_string(), is_down: true };
+                                        match keyboard_tx.send(event) {
                                             Ok(()) => {
                                                 log::debug!("Key press detected: {}", key_code)
                                             }
@@ -129,7 +132,8 @@ pub fn start_evdev_keyboard_listener(
                                         }
 
                                         // Send key release event
-                                        match keyboard_tx.send(format!("UP:{}", key_code)) {
+                                        let event = InputEvent { code: key_code.to_string(), is_down: false };
+                                        match keyboard_tx.send(event) {
                                             Ok(()) => {
                                                 log::debug!("Key release detected: {}", key_code)
                                             }
