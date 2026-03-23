@@ -3,6 +3,7 @@ use crate::components::ui::{Collapse, PageHeader, Toggler};
 use crate::libs::theme::{BuiltInTheme, Theme, use_theme};
 use crate::libs::tray_service::request_tray_update;
 use crate::state::app::use_update_info_setter;
+use crate::state::config::AppConfig;
 use crate::utils::auto_updater::{UpdateInfo, check_for_updates_simple};
 use crate::utils::config::use_config;
 use crate::utils::constants::{APP_NAME, APP_NAME_DISPLAY};
@@ -146,7 +147,7 @@ pub fn SettingsPage() -> Element {
                                                 }),
                                             );
                                             spawn(async move {
-                                                if crate::state::config::AppConfig::load().auto_start {
+                                                if AppConfig::get().auto_start {
                                                     match crate::utils::auto_startup::set_auto_startup(true) {
                                                         Ok(_) => {
                                                             let status = if new_value {
@@ -199,52 +200,61 @@ pub fn SettingsPage() -> Element {
                                 button {
                                     class: "btn btn-soft btn-sm",
                                     disabled: is_checking_updates(),
-                                    onclick: move |_| {
-                                        log::info!("Manual update check requested");
-                                        is_checking_updates.set(true);
-                                        check_error.set(None);
-                                        let mut update_info = update_info.clone();
-                                        let mut is_checking_updates = is_checking_updates.clone();
-                                        let mut check_error = check_error.clone();
-                                        let update_info_setter = update_info_setter.clone();
-                                        spawn(async move {
-                                            match check_for_updates_simple().await {
-                                                Ok(info) => {
-                                                    update_info.set(Some(info.clone()));
-                                                    let mut app_config = crate::state::config::AppConfig::load();
-                                                    if info.update_available {
-                                                        app_config.auto_update.available_version = Some(
-                                                            info.latest_version.clone(),
-                                                        );
-                                                        app_config.auto_update.available_download_url = info
-                                                            .download_url
-                                                            .clone();
-                                                    } else {
-                                                        app_config.auto_update.available_version = None;
-                                                        app_config.auto_update.available_download_url = None;
+                                    onclick: {
+                                        let update_config = update_config.clone();
+                                        move |_| {
+                                            log::info!("Manual update check requested");
+                                            is_checking_updates.set(true);
+                                            check_error.set(None);
+                                            let mut update_info = update_info.clone();
+                                            let mut is_checking_updates = is_checking_updates.clone();
+                                            let mut check_error = check_error.clone();
+                                            let update_info_setter = update_info_setter.clone();
+                                            let update_config = update_config.clone();
+                                            spawn(async move {
+                                                match check_for_updates_simple().await {
+                                                    Ok(info) => {
+                                                        update_info.set(Some(info.clone()));
+
+                                                        let info_clone = info.clone();
+                                                        update_config(
+                                                            Box::new(move |config| {
+                                                                if info_clone.update_available {
+                                                                    config.auto_update.available_version = Some(
+                                                                        info_clone.latest_version.clone(),
+                                                                    );
+                                                                    config.auto_update.available_download_url = info_clone
+                                                                    .download_url
+                                                                        .clone();
+                                                                } else {
+                                                                    config.auto_update.available_version = None;
+                                                                    config.auto_update.available_download_url = None;
+                                                                }
+                                                                config.auto_update.last_check = Some(
+                                                                    std::time::SystemTime::now()
+                                                                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                                                        .unwrap_or_default()
+                                                                        .as_secs(),
+                                                                    );
+                                                                }),
+                                                            );
+
+                                                        if info.update_available {
+                                                            update_info_setter.call(Some(info));
+                                                        } else {
+                                                            update_info_setter.call(None);
+                                                        }
+                                                        check_error.set(None);
                                                     }
-                                                    app_config.auto_update.last_check = Some(
-                                                        std::time::SystemTime::now()
-                                                            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                                                            .unwrap_or_default()
-                                                            .as_secs(),
-                                                    );
-                                                    let _ = app_config.save();
-                                                    if info.update_available {
-                                                        update_info_setter.call(Some(info));
-                                                    } else {
+                                                    Err(e) => {
+                                                        check_error.set(Some(format!("Failed to check for updates: {}", e)));
+                                                        update_info.set(None);
                                                         update_info_setter.call(None);
                                                     }
-                                                    check_error.set(None);
                                                 }
-                                                Err(e) => {
-                                                    check_error.set(Some(format!("Failed to check for updates: {}", e)));
-                                                    update_info.set(None);
-                                                    update_info_setter.call(None);
-                                                }
-                                            }
-                                            is_checking_updates.set(false);
-                                        });
+                                                is_checking_updates.set(false);
+                                            });
+                                        }
                                     },
                                     if is_checking_updates() {
                                         span { class: "loading loading-spinner loading-xs mr-1" }

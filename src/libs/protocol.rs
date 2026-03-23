@@ -201,62 +201,17 @@ fn install_soundpack_from_protocol(soundpack_name: &str) -> Result<(), Box<dyn s
     let soundpack_path = soundpacks_dir.join(soundpack_name);
 
     if Path::new(&soundpack_path).exists() {
-        // Add to config
-        let mut config = AppConfig::load();
-        config.keyboard_soundpack = soundpack_name.to_string();
-        if let Err(e) = config.save() {
-            log::error!("❌ Failed to save config with new soundpack: {}", e);
-            return Err(e.into());
-        }
+        AppConfig::update(|config| {
+            config.keyboard_soundpack = soundpack_name.to_string();
+        });
         log::info!("✅ Installed and activated soundpack: {}", soundpack_name);
     } else {
         // For real implementation, we would download it here
-        log::warn!(
-            "⚠️Soundpack not found locally: {}. Would download in production.",
-            soundpack_name,
-        );
-        // Create a placeholder for testing
-        fs::create_dir_all(&soundpack_path)?;
-        fs::write(
-            soundpack_path.join("config.json"),
-            format!(
-                r#"{{
-  "name": "Test Soundpack - {}",
-  "author": "Protocol Test",
-  "version": "1.0.0",
-  "key_define": {{
-    "default": "sound.ogg"
-  }}
-}}"#,
-                soundpack_name
-            ),
-        )?;
-
-        // Create a placeholder sound file by copying from an existing soundpack
-        let source_sound = app_root.join("soundpacks").join("oreo").join("oreo.ogg");
-        let target_sound = soundpack_path.join("sound.ogg");
-
-        if source_sound.exists() {
-            fs::copy(source_sound, target_sound)?;
-        } else {
-            // Create an empty sound file if source doesn't exist
-            fs::write(soundpack_path.join("sound.ogg"), &[0u8; 1024])?;
-        }
-
-        // Update config to use the new soundpack
-        let mut config = AppConfig::load();
-        config.keyboard_soundpack = soundpack_name.to_string();
-        if let Err(e) = config.save() {
-            log::error!("❌ Failed to save config with new soundpack: {}", e);
-            return Err(e.into());
-        }
-
-        log::info!(
-            "✅ Created and activated placeholder soundpack: {}",
+        unimplemented!(
+            "Soundpack not found locally: {}. Would download in production.",
             soundpack_name
         );
     }
-
     Ok(())
 }
 
@@ -310,12 +265,9 @@ fn import_theme_from_protocol(theme_data: &str) -> Result<(), Box<dyn std::error
     }
 
     // Set as current theme
-    let mut config = AppConfig::load();
-    config.theme = Theme::Custom(theme_id.clone());
-
-    if let Err(e) = config.save() {
-        return Err(format!("Failed to apply imported theme: {}", e).into());
-    }
+    AppConfig::update(|config| {
+        config.theme = Theme::Custom(theme_id.clone());
+    });
 
     log::info!("✅ Theme imported and applied: {}", theme_name);
     Ok(())

@@ -1,6 +1,7 @@
 use crate::libs::tray::{TrayManager, TrayMessage, handle_tray_events, handle_tray_icon_click};
 use crate::libs::tray_service::TRAY_UPDATE_SERVICE;
 use crate::libs::window_manager::{WINDOW_MANAGER, WindowAction};
+use crate::state::config::AppConfig;
 use dioxus::desktop::use_window;
 use dioxus::prelude::*;
 use std::sync::mpsc;
@@ -101,33 +102,25 @@ pub fn WindowController() -> Element {
                         }
                         TrayMessage::ToggleMute => {
                             // Toggle the global sound enable flag
-                            let mut config = crate::state::config::AppConfig::load();
-                            config.enable_sound = !config.enable_sound;
-                            // Update timestamp to trigger UI refresh
-                            config.last_updated = chrono::Utc::now();
-                            match config.save() {
-                                Ok(_) => {
-                                    let status = if config.enable_sound {
-                                        "enabled"
-                                    } else {
-                                        "disabled"
-                                    };
-                                    log::debug!("🔇 Sounds {} via tray menu", status); // Update tray menu to reflect new state
-                                    tray_manager_clone.with_mut(|tray_opt| {
-                                        if let Some(tray) = tray_opt {
-                                            if let Err(e) = tray.update_menu() {
-                                                log::error!("❌ Failed to update tray menu: {}", e);
-                                            }
-                                        }
-                                    });
+                            AppConfig::update(|config| {
+                                config.enable_sound = !config.enable_sound;
+                            });
+                            let status = if AppConfig::get().enable_sound {
+                                "enabled"
+                            } else {
+                                "disabled"
+                            };
+
+                            log::debug!("🔇 Sounds {} via tray menu", status);
+
+                            // Update tray menu to reflect new state
+                            tray_manager_clone.with_mut(|tray_opt| {
+                                if let Some(tray) = tray_opt {
+                                    if let Err(e) = tray.update_menu() {
+                                        log::error!("❌ Failed to update tray menu: {}", e);
+                                    }
                                 }
-                                Err(e) => {
-                                    log::error!(
-                                        "❌ Failed to save config after mute toggle: {}",
-                                        e
-                                    );
-                                }
-                            }
+                            });
                         }
                         TrayMessage::OpenGitHub => {
                             let url = "https://github.com/hainguyents13/mechvibes-dx";

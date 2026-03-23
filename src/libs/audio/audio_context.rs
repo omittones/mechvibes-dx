@@ -44,7 +44,7 @@ impl AudioContext {
     pub fn new() -> Self {
         // Initialize device manager
         let device_manager = DeviceManager::new();
-        let config = AppConfig::load();
+        let config = AppConfig::get();
 
         // Try to use selected device or fall back to default
         let (stream, stream_handle) = match &config.selected_audio_device {
@@ -96,8 +96,8 @@ impl AudioContext {
             last_keyboard_sound_time: Arc::new(Mutex::new(None)),
             last_mouse_sound_time: Arc::new(Mutex::new(None)),
         };
+
         // Initialize volume from config
-        let config = AppConfig::load();
         AUDIO_VOLUME.get_or_init(|| Mutex::new(config.volume));
         MOUSE_AUDIO_VOLUME.get_or_init(|| Mutex::new(config.mouse_volume));
 
@@ -123,9 +123,9 @@ impl AudioContext {
         }
 
         // Save to config file
-        let mut config = AppConfig::load();
-        config.volume = volume;
-        let _ = config.save();
+        AppConfig::update(|config| {
+            config.volume = volume;
+        });
     }
 
     pub fn get_volume(&self) -> f32 {
@@ -150,9 +150,9 @@ impl AudioContext {
         }
 
         // Save to config file
-        let mut config = AppConfig::load();
-        config.mouse_volume = volume;
-        let _ = config.save();
+        AppConfig::update(|config| {
+            config.mouse_volume = volume;
+        });
     }
 
     pub fn get_mouse_volume(&self) -> f32 {
@@ -208,7 +208,7 @@ impl AudioContext {
         };
 
         // Initialize volume from config
-        let config = AppConfig::load();
+        let config = AppConfig::get();
         AUDIO_VOLUME.get_or_init(|| Mutex::new(config.volume));
         MOUSE_AUDIO_VOLUME.get_or_init(|| Mutex::new(config.mouse_volume)); // Load soundpack from config
         match super::load_soundpack_from_config(&context, false) {
@@ -220,12 +220,12 @@ impl AudioContext {
     }
 
     pub fn get_current_device_info(&self) -> Option<String> {
-        let config = AppConfig::load();
-        config.selected_audio_device
+        let config = AppConfig::get();
+        config.selected_audio_device.clone()
     }
 
     pub fn test_current_device(&self) -> bool {
-        let config = AppConfig::load();
+        let config = AppConfig::get();
         match &config.selected_audio_device {
             Some(device_id) => self
                 .device_manager

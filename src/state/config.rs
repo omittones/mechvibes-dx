@@ -5,6 +5,7 @@ use crate::utils::{data, path};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock, RwLockReadGuard};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MusicPlayerConfig {
@@ -114,8 +115,40 @@ pub struct AppConfig {
     pub auto_update: AutoUpdateConfig, // Auto-update settings
 }
 
+static GLOBAL_APP_CONFIG: LazyLock<RwLock<AppConfig>> =
+    std::sync::LazyLock::new(|| RwLock::new(AppConfig::load()));
+
 impl AppConfig {
-    pub fn load() -> Self {
+    pub fn get() -> RwLockReadGuard<'static, Self> {
+        log::debug!("🔍 Getting app config");
+        match GLOBAL_APP_CONFIG.read() {
+            Ok(guard) => guard,
+            Err(e) => {
+                log::error!("Failed to read app config: {}", e);
+                panic!("Failed to read app config");
+            }
+        }
+    }
+
+    pub fn update(updater: impl FnOnce(&mut Self)) {
+        log::debug!("🔍 Updating app config");
+        match GLOBAL_APP_CONFIG.write() {
+            Ok(mut guard) => {
+                updater(&mut guard);
+                guard.last_updated = chrono::Utc::now();
+                match guard.save() {
+                    Ok(_) => log::debug!("🔄 App config updated"),
+                    Err(e) => log::error!("❌ Failed to save app config: {}", e),
+                }
+            }
+            Err(e) => {
+                log::error!("Failed to write app config: {}", e);
+                panic!("Failed to write app config");
+            }
+        }
+    }
+
+    fn load() -> Self {
         let config_path = paths::data::config_json();
 
         // Ensure data directory exists
@@ -154,7 +187,7 @@ impl AppConfig {
         }
     }
 
-    pub fn save(&self) -> Result<(), String> {
+    fn save(&self) -> Result<(), String> {
         let config_path = paths::data::config_json();
         data::save_json_to_file(self, &config_path)
     }

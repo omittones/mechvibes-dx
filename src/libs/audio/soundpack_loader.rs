@@ -12,55 +12,72 @@ pub fn load_soundpack_from_config(
     audio_ctx: &AudioContext,
     update_config: bool,
 ) -> Result<(), String> {
-    let mut config = AppConfig::load();
-    let mut config_changed = false;
     let mut last_err: Option<String> = None;
 
+    let config = AppConfig::get();
     // Load keyboard soundpack
-    if !config.keyboard_soundpack.is_empty() {
+    let clear_keyboard_soundpack = if !config.keyboard_soundpack.is_empty() {
         match SoundpackRef::parse(&config.keyboard_soundpack)
             .map(|id| load_soundpack_file(audio_ctx, &id))
         {
-            Ok(_) => log::debug!(
-                "✅ Keyboard soundpack '{}' reloaded successfully",
-                config.keyboard_soundpack
-            ),
+            Ok(_) => {
+                log::debug!(
+                    "✅ Keyboard soundpack '{}' reloaded successfully",
+                    config.keyboard_soundpack
+                );
+                false
+            }
             Err(e) => {
                 log::error!(
                     "❌ Failed to reload keyboard soundpack '{}'. Clearing selection.",
                     config.keyboard_soundpack
                 );
                 last_err = Some(e.to_string());
-                config.keyboard_soundpack = "".to_string();
-                config_changed = true;
+                true
             }
         }
-    }
+    } else {
+        true
+    };
 
     // Load mouse soundpack
-    if !config.mouse_soundpack.is_empty() {
+    let clear_mouse_soundpack = if !config.mouse_soundpack.is_empty() {
         match SoundpackRef::parse(&config.mouse_soundpack)
             .map(|id| load_soundpack_file(audio_ctx, &id).ok())
         {
-            Ok(_) => log::debug!(
-                "✅ Mouse soundpack '{}' reloaded successfully",
-                config.mouse_soundpack
-            ),
+            Ok(_) => {
+                log::debug!(
+                    "✅ Mouse soundpack '{}' reloaded successfully",
+                    config.mouse_soundpack
+                );
+                false
+            }
             Err(e) => {
                 log::error!(
                     "❌ Failed to reload mouse soundpack '{}'. Clearing selection.",
                     config.mouse_soundpack
                 );
                 last_err = Some(e.to_string());
-                config.mouse_soundpack = "".to_string();
-                config_changed = true;
+                true
             }
         }
-    }
+    } else {
+        true
+    };
+
+    // Drop config to avoid holding the lock for too long
+    drop(config);
 
     // Save config if any changes were made and requested by caller
-    if config_changed && update_config {
-        let _ = config.save();
+    if update_config && (clear_keyboard_soundpack || clear_mouse_soundpack) {
+        AppConfig::update(|config| {
+            if clear_keyboard_soundpack {
+                config.keyboard_soundpack = "".to_string()
+            };
+            if clear_mouse_soundpack {
+                config.mouse_soundpack = "".to_string()
+            }
+        });
         log::debug!("💾 Config updated due to failed soundpack loads");
     }
 

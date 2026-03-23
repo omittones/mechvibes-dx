@@ -6,6 +6,7 @@ use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
 use crate::libs::soundpack::cache::{SoundpackRef, SoundpackType};
 use crate::libs::tray_service::request_tray_update;
+use crate::state::config::AppConfig;
 use crate::state::keyboard::KeyboardState;
 use crate::utils::delay;
 
@@ -136,21 +137,12 @@ pub fn app() -> Element {
                 loop {
                     if let Ok(hotkey_command) = hotkey_rx.try_recv() {
                         if hotkey_command == "TOGGLE_SOUND" {
-                            let mut config = crate::state::config::AppConfig::load();
-                            config.enable_sound = !config.enable_sound;
-                            config.last_updated = chrono::Utc::now();
-                            match config.save() {
-                                Ok(_) => {
-                                    request_tray_update();
-                                    log::debug!("🔄 Sound toggled: {}", config.enable_sound);
-                                }
-                                Err(e) => {
-                                    log::error!(
-                                        "❌ Failed to save config after sound toggle: {}",
-                                        e
-                                    );
-                                }
-                            }
+                            AppConfig::update(|config| {
+                                config.enable_sound = !config.enable_sound;
+                                config.last_updated = chrono::Utc::now();
+                            });
+                            log::debug!("🔄 Sound toggled: {}", AppConfig::get().enable_sound);
+                            request_tray_update();
                         }
                     }
                     delay::Delay::key_event().await;
@@ -163,11 +155,8 @@ pub fn app() -> Element {
     #[cfg(feature = "auto-update")]
     {
         use crate::utils::auto_updater::UpdateService;
-        use std::sync::Arc;
-        use tokio::sync::Mutex;
         use_future(move || async move {
-            let config = Arc::new(Mutex::new(crate::state::config::AppConfig::load()));
-            let update_service = UpdateService::new(config);
+            let update_service = UpdateService {};
 
             // Start background update checking
             update_service.start().await;

@@ -16,6 +16,8 @@ use libs::window_manager::{WINDOW_MANAGER, WindowAction};
 use std::sync::mpsc;
 use utils::constants::APP_NAME;
 
+use crate::state::config::AppConfig;
+
 // Use .ico format for better Windows compatibility
 const EMBEDDED_ICON: &[u8] = include_bytes!("../assets/icon.ico");
 
@@ -95,9 +97,10 @@ fn main() {
     log::debug!("🔍 Command line args: {:?}", args);
 
     // Check if we should start minimized (from auto-startup)
-    let should_start_minimized = args.contains(&"--minimized".to_string())
-        || (state::config::AppConfig::load().auto_start
-            && state::config::AppConfig::load().start_minimized);
+    let should_start_minimized = {
+        let config = AppConfig::get();
+        args.contains(&"--minimized".to_string()) || (config.auto_start && config.start_minimized)
+    };
 
     // Register protocol on first run
     // if let Err(e) = protocol::register_protocol() {

@@ -7,8 +7,7 @@ use crate::state::config::AppConfig;
 
 impl AudioContext {
     pub fn play_key_event_sound(&self, key: &str, is_keydown: bool) {
-        // Check enable_sound from config before playing audio
-        let config = AppConfig::load();
+        let config = AppConfig::get();
         if !config.enable_sound || !config.enable_keyboard_sound {
             log::debug!(
                 "🔇 Sound disabled, skipping key event sound for key '{}'",
@@ -261,7 +260,7 @@ impl AudioContext {
 
     pub fn play_mouse_event_sound(&self, button: &str, is_buttondown: bool) {
         // Check enable_sound from config before playing audio
-        let config = AppConfig::load();
+        let config = AppConfig::get();
         if !config.enable_sound || !config.enable_mouse_sound {
             return;
         }

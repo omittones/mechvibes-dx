@@ -1,4 +1,4 @@
-use crate::utils::constants::APP_NAME;
+use crate::{state::config::AppConfig, utils::constants::APP_NAME};
 use std::sync::Mutex;
 use std::time::Instant;
 use tray_icon::{
@@ -25,7 +25,7 @@ pub struct TrayManager {
 impl TrayManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         // Load current config to determine sound state
-        let config = crate::state::config::AppConfig::load();
+        let config = AppConfig::get();
         let mute_text = if config.enable_sound {
             "Mute sounds"
         } else {
@@ -107,7 +107,7 @@ impl TrayManager {
 
     pub fn update_menu(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         // Load current config to determine sound state
-        let config = crate::state::config::AppConfig::load();
+        let config = AppConfig::get();
         let mute_text = if config.enable_sound {
             "Mute sounds"
         } else {

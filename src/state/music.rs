@@ -198,6 +198,7 @@ impl MusicCache {
             Err(e) => Err(format!("Failed to serialize music cache: {}", e)),
         }
     }
+
     /// Fetch fresh music data from API and update timestamp in config
     pub async fn fetch_and_update() -> Result<Self, String> {
         log::info!("🎵 Fetching fresh music data from API...");
@@ -213,28 +214,31 @@ impl MusicCache {
         cache.save_to_file()?;
 
         // Update timestamp in config
-        let mut config = AppConfig::load();
         let current_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|e| format!("Failed to get current timestamp: {}", e))?
             .as_secs();
-        config.music_player.music_last_updated = current_timestamp;
-        config.save()?;
+        AppConfig::update(|config| {
+            config.music_player.music_last_updated = current_timestamp;
+        });
 
         Ok(cache)
     }
+
     /// Check if cache needs to be updated based on config timestamp
     pub fn should_fetch_from_config() -> bool {
-        let config = AppConfig::load();
         let current_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
 
         // Fetch if never updated or older than 6 hours (21600 seconds)
-        config.music_player.music_last_updated == 0
-            || current_timestamp - config.music_player.music_last_updated > 21600
+        let config = AppConfig::get();
+        let should_fetch = config.music_player.music_last_updated == 0
+            || current_timestamp - config.music_player.music_last_updated > 21600;
+        should_fetch
     }
+
     /// Load cache with intelligent caching - only fetch if needed
     pub async fn load_or_fetch() -> Result<Self, String> {
         if Self::should_fetch_from_config() {
@@ -1122,7 +1126,7 @@ impl MusicPlayerState {
     }
     pub async fn initialize() -> Result<Self, String> {
         // Load config first
-        let config = AppConfig::load();
+        let config = AppConfig::get();
 
         // Use optimized cache loading - only fetches if needed
         let cache = MusicCache::load_or_fetch().await?;
@@ -1158,15 +1162,14 @@ impl MusicPlayerState {
             ..Default::default()
         })
     }
+
     pub fn save_config(&self) -> Result<(), String> {
-        let mut config = AppConfig::load();
-
-        // Update music player config
-        config.music_player.current_track_id = self.get_current_track_id();
-        config.music_player.volume = self.volume;
-        config.music_player.is_muted = self.is_muted;
-
-        config.save()
+        AppConfig::update(|config| {
+            config.music_player.current_track_id = self.get_current_track_id();
+            config.music_player.volume = self.volume;
+            config.music_player.is_muted = self.is_muted;
+        });
+        Ok(())
     }
 
     pub fn get_current_track_id(&self) -> Option<String> {

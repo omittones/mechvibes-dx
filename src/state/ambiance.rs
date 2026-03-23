@@ -251,7 +251,7 @@ impl AmbiancePlayerState {
 
     /// Initialize from config
     pub fn initialize() -> Self {
-        let config = AppConfig::load();
+        let config = AppConfig::get();
 
         Self {
             sounds: Self::get_builtin_sounds(),
@@ -264,12 +264,12 @@ impl AmbiancePlayerState {
 
     /// Save current state to config
     pub fn save_config(&self) -> Result<(), String> {
-        let mut config = AppConfig::load();
-        config.ambiance_active_sounds = self.active_sounds.clone();
-        config.ambiance_global_volume = self.global_volume;
-        config.ambiance_is_muted = self.is_muted;
-        // Don't save is_playing - always start paused
-        config.save()
+        AppConfig::update(|config| {
+            config.ambiance_active_sounds = self.active_sounds.clone();
+            config.ambiance_global_volume = self.global_volume;
+            config.ambiance_is_muted = self.is_muted;
+        });
+        Ok(())
     }
 
     /// Get built-in ambiance sounds (using local assets)
