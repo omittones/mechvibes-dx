@@ -1,12 +1,14 @@
 use rodio::Sink;
 use rodio::buffer::SamplesBuffer;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use super::audio_context::AudioContext;
 use crate::state::config::AppConfig;
 
 impl AudioContext {
-    pub fn play_key_event_sound(&self, key: &str, is_keydown: bool) {
+    pub fn play_key_event_sound(&self, key: &str, is_keydown: bool, received_at: Instant) {
+        // Check enable_sound from config before playing audio
         let config = AppConfig::get();
         if !config.enable_sound || !config.enable_keyboard_sound {
             log::debug!(
@@ -15,6 +17,9 @@ impl AudioContext {
             );
             return;
         }
+
+        // Drop config to avoid holding the lock for too long
+        drop(config);
 
         let mut pressed = self.key_pressed.lock().unwrap();
         if is_keydown {
@@ -96,10 +101,17 @@ impl AudioContext {
         };
         drop(key_map);
 
-        self.play_sound_segment(key, start, end, is_keydown);
+        self.play_sound_segment(key, start, end, is_keydown, received_at);
     }
 
-    fn play_sound_segment(&self, key: &str, start: f32, end: f32, is_keydown: bool) {
+    fn play_sound_segment(
+        &self,
+        key: &str,
+        start: f32,
+        end: f32,
+        is_keydown: bool,
+        received_at: Instant,
+    ) {
         log::debug!(
             "Playing sound for key '{}': start={:.3}ms, end={:.3}ms",
             key,
@@ -184,6 +196,7 @@ impl AudioContext {
                     if let Ok(sink) = Sink::try_new(&self.stream_handle) {
                         sink.set_volume(self.get_volume());
                         sink.append(segment);
+                        self.log_sound_latency(key, received_at);
 
                         let mut key_sinks = self.key_sinks.lock().unwrap();
                         self.manage_active_sinks(&mut key_sinks);
@@ -222,6 +235,7 @@ impl AudioContext {
             if let Ok(sink) = Sink::try_new(&self.stream_handle) {
                 sink.set_volume(self.get_volume());
                 sink.append(segment);
+                self.log_sound_latency(key, received_at);
 
                 let mut key_sinks = self.key_sinks.lock().unwrap();
                 self.manage_active_sinks(&mut key_sinks);
@@ -258,7 +272,7 @@ impl AudioContext {
         }
     }
 
-    pub fn play_mouse_event_sound(&self, button: &str, is_buttondown: bool) {
+    pub fn play_mouse_event_sound(&self, button: &str, is_buttondown: bool, received_at: Instant) {
         // Check enable_sound from config before playing audio
         let config = AppConfig::get();
         if !config.enable_sound || !config.enable_mouse_sound {
@@ -316,7 +330,7 @@ impl AudioContext {
         };
         drop(mouse_map);
 
-        self.play_mouse_sound_segment(button, start, duration, is_buttondown);
+        self.play_mouse_sound_segment(button, start, duration, is_buttondown, received_at);
     }
 
     fn play_mouse_sound_segment(
@@ -325,6 +339,7 @@ impl AudioContext {
         start: f32,
         duration: f32,
         is_buttondown: bool,
+        received_at: Instant,
     ) {
         let pcm_opt = self.mouse_samples.lock().unwrap().clone();
         if let Some((samples, channels, sample_rate)) = pcm_opt {
@@ -414,6 +429,7 @@ impl AudioContext {
             if let Ok(sink) = Sink::try_new(&self.stream_handle) {
                 sink.set_volume(self.get_mouse_volume());
                 sink.append(segment);
+                self.log_sound_latency(button, received_at);
 
                 let mut mouse_sinks = self.mouse_sinks.lock().unwrap();
                 self.manage_active_mouse_sinks(&mut mouse_sinks);

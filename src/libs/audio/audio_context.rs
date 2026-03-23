@@ -5,9 +5,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-static AUDIO_VOLUME: std::sync::OnceLock<Mutex<f32>> = std::sync::OnceLock::new();
-static MOUSE_AUDIO_VOLUME: std::sync::OnceLock<Mutex<f32>> = std::sync::OnceLock::new();
-
 #[derive(Clone)]
 pub struct AudioContext {
     _stream: Arc<OutputStream>,
@@ -22,9 +19,6 @@ pub struct AudioContext {
     pub(crate) key_sinks: Arc<Mutex<HashMap<String, Sink>>>,
     pub(crate) mouse_sinks: Arc<Mutex<HashMap<String, Sink>>>,
     pub(crate) device_manager: DeviceManager,
-    // Timing tracking for rapid event detection
-    pub(crate) last_keyboard_sound_time: Arc<Mutex<Option<Instant>>>,
-    pub(crate) last_mouse_sound_time: Arc<Mutex<Option<Instant>>>,
 }
 
 // Safety: OutputStream contains a cpal::Stream with a raw pointer kept alive purely for RAII.
@@ -49,7 +43,7 @@ impl AudioContext {
         // Try to use selected device or fall back to default
         let (stream, stream_handle) = match &config.selected_audio_device {
             Some(device_id) => match device_manager.get_output_device_by_id(device_id) {
-                Ok(Some(device)) => match rodio::OutputStream::try_from_device(&device) {
+                Ok(Some(device)) => match OutputStream::try_from_device(&device) {
                     Ok((stream, handle)) => (stream, handle),
                     Err(e) => {
                         log::error!(
@@ -58,7 +52,7 @@ impl AudioContext {
                             e
                         );
                         log::error!("🔄 Falling back to default device...");
-                        rodio::OutputStream::try_default()
+                        OutputStream::try_default()
                             .expect("Failed to create default audio output stream")
                     }
                 },
@@ -67,17 +61,18 @@ impl AudioContext {
                         "❌ Selected audio device {} not found, using default",
                         device_id
                     );
-                    rodio::OutputStream::try_default()
+                    OutputStream::try_default()
                         .expect("Failed to create default audio output stream")
                 }
                 Err(e) => {
                     log::error!("❌ Error accessing selected device {}: {}", device_id, e);
-                    rodio::OutputStream::try_default()
+                    OutputStream::try_default()
                         .expect("Failed to create default audio output stream")
                 }
             },
-            None => rodio::OutputStream::try_default()
-                .expect("Failed to create default audio output stream"),
+            None => {
+                OutputStream::try_default().expect("Failed to create default audio output stream")
+            }
         };
 
         let context = Self {
@@ -93,13 +88,7 @@ impl AudioContext {
             key_sinks: Arc::new(Mutex::new(HashMap::new())),
             mouse_sinks: Arc::new(Mutex::new(HashMap::new())),
             device_manager,
-            last_keyboard_sound_time: Arc::new(Mutex::new(None)),
-            last_mouse_sound_time: Arc::new(Mutex::new(None)),
         };
-
-        // Initialize volume from config
-        AUDIO_VOLUME.get_or_init(|| Mutex::new(config.volume));
-        MOUSE_AUDIO_VOLUME.get_or_init(|| Mutex::new(config.mouse_volume));
 
         // Load soundpack from config
         match super::load_soundpack_from_config(&context, false) {
@@ -109,17 +98,12 @@ impl AudioContext {
 
         context
     }
+
     pub fn set_volume(&self, volume: f32) {
         // Update volume for current keys only
         let key_sinks = self.key_sinks.lock().unwrap();
         for sink in key_sinks.values() {
             sink.set_volume(volume);
-        }
-
-        // Update global variable
-        if let Some(global) = AUDIO_VOLUME.get() {
-            let mut g = global.lock().unwrap();
-            *g = volume;
         }
 
         // Save to config file
@@ -129,11 +113,8 @@ impl AudioContext {
     }
 
     pub fn get_volume(&self) -> f32 {
-        AUDIO_VOLUME
-            .get()
-            .and_then(|v| v.lock().ok())
-            .map(|v| *v)
-            .unwrap_or(1.0)
+        let config = AppConfig::get();
+        config.volume
     }
 
     pub fn set_mouse_volume(&self, volume: f32) {
@@ -143,12 +124,6 @@ impl AudioContext {
             sink.set_volume(volume);
         }
 
-        // Update global variable
-        if let Some(global) = MOUSE_AUDIO_VOLUME.get() {
-            let mut g = global.lock().unwrap();
-            *g = volume;
-        }
-
         // Save to config file
         AppConfig::update(|config| {
             config.mouse_volume = volume;
@@ -156,11 +131,13 @@ impl AudioContext {
     }
 
     pub fn get_mouse_volume(&self) -> f32 {
-        MOUSE_AUDIO_VOLUME
-            .get()
-            .and_then(|v| v.lock().ok())
-            .map(|v| *v)
-            .unwrap_or(1.0)
+        let config = AppConfig::get();
+        config.mouse_volume
+    }
+
+    pub(crate) fn log_sound_latency(&self, event: &str, received_at: Instant) {
+        let ms = received_at.elapsed().as_secs_f32() * 1000.0;
+        log::debug!("⏱️ Sound '{}' input latency: {:.3} ms", event, ms,);
     }
 
     pub fn create_with_device(device_id: Option<String>) -> Result<Self, String> {
@@ -203,14 +180,8 @@ impl AudioContext {
             key_sinks: Arc::new(Mutex::new(HashMap::new())),
             mouse_sinks: Arc::new(Mutex::new(HashMap::new())),
             device_manager,
-            last_keyboard_sound_time: Arc::new(Mutex::new(None)),
-            last_mouse_sound_time: Arc::new(Mutex::new(None)),
         };
 
-        // Initialize volume from config
-        let config = AppConfig::get();
-        AUDIO_VOLUME.get_or_init(|| Mutex::new(config.volume));
-        MOUSE_AUDIO_VOLUME.get_or_init(|| Mutex::new(config.mouse_volume)); // Load soundpack from config
         match super::load_soundpack_from_config(&context, false) {
             Ok(_) => {}
             Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),

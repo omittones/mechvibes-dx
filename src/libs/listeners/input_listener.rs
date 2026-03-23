@@ -134,7 +134,14 @@ fn map_key_to_code(key: Key) -> &'static str {
         Key::Function => "Fn", // Special function key on some keyboards
 
         // Unknown or unmapped keys
-        Key::Unknown(_) => "", // Handle unknown keys gracefully
+        Key::Unknown(id) => {
+            log::debug!(
+                "⚠️ Ignored unmapped key event (input listener): {:?}:{}",
+                key,
+                id
+            );
+            ""
+        }
     }
 }
 
@@ -240,7 +247,11 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            let event = InputEvent { code: key_code.to_string(), is_down: true };
+                            let event = InputEvent {
+                                code: key_code.to_string(),
+                                is_down: true,
+                                received_at: Instant::now(),
+                            };
                             match keyboard_tx.send(event) {
                                 Ok(()) => log::debug!("Key press detected: {}", key_code),
                                 Err(e) => {
@@ -276,7 +287,11 @@ pub fn start_unified_input_listener(
                         pressed.remove(&key_code.to_string());
                         drop(pressed);
 
-                        let event = InputEvent { code: key_code.to_string(), is_down: false };
+                        let event = InputEvent {
+                            code: key_code.to_string(),
+                            is_down: false,
+                            received_at: Instant::now(),
+                        };
                         match keyboard_tx.send(event) {
                             Ok(()) => log::debug!("Key release detected: {}", key_code),
                             Err(e) => {
@@ -319,7 +334,11 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            let event = InputEvent { code: button_code.to_string(), is_down: true };
+                            let event = InputEvent {
+                                code: button_code.to_string(),
+                                is_down: true,
+                                received_at: Instant::now(),
+                            };
                             match mouse_tx.send(event) {
                                 Ok(()) => log::debug!("Mouse press detected: {}", button_code),
                                 Err(e) => log::error!(
@@ -343,7 +362,11 @@ pub fn start_unified_input_listener(
                         pressed.remove(&button_code.to_string());
                         drop(pressed);
 
-                        let event = InputEvent { code: button_code.to_string(), is_down: false };
+                        let event = InputEvent {
+                            code: button_code.to_string(),
+                            is_down: false,
+                            received_at: Instant::now(),
+                        };
                         match mouse_tx.send(event) {
                             Ok(()) => log::debug!("Mouse release detected: {}", button_code),
                             Err(e) => {

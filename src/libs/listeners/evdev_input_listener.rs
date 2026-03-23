@@ -4,6 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::libs::input_manager::InputEvent;
+use std::time::Instant;
 
 #[cfg(target_os = "linux")]
 pub fn start_evdev_keyboard_listener(
@@ -106,7 +107,11 @@ pub fn start_evdev_keyboard_listener(
                                         }
 
                                         // Send key press event
-                                        let event = InputEvent { code: key_code.to_string(), is_down: true };
+                                        let event = InputEvent {
+                                            code: key_code.to_string(),
+                                            is_down: true,
+                                            received_at: Instant::now(),
+                                        };
                                         match keyboard_tx.send(event) {
                                             Ok(()) => {
                                                 log::debug!("Key press detected: {}", key_code)
@@ -132,7 +137,11 @@ pub fn start_evdev_keyboard_listener(
                                         }
 
                                         // Send key release event
-                                        let event = InputEvent { code: key_code.to_string(), is_down: false };
+                                        let event = InputEvent {
+                                            code: key_code.to_string(),
+                                            is_down: false,
+                                            received_at: Instant::now(),
+                                        };
                                         match keyboard_tx.send(event) {
                                             Ok(()) => {
                                                 log::debug!("Key release detected: {}", key_code)
@@ -268,6 +277,9 @@ fn map_evdev_keycode(key: evdev::KeyCode) -> &'static str {
         KeyCode::KEY_DOT => "Period",
         KeyCode::KEY_SLASH => "Slash",
 
-        _ => "",
+        _ => {
+            log::debug!("⚠️ Ignored unmapped key event (evdev listener): {:?}", key);
+            ""
+        }
     }
 }
