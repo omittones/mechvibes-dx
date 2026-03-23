@@ -3,7 +3,7 @@ use device_query::{DeviceQuery, DeviceState, Keycode};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::libs::input_manager::InputEvent;
 
@@ -120,7 +120,14 @@ fn map_device_query_keycode(key: Keycode) -> &'static str {
         Keycode::Numpad8 => "Numpad8",
         Keycode::Numpad9 => "Numpad9",
 
-        _ => "",
+        // Unknown or unmapped keys
+        _ => {
+            log::debug!(
+                "⚠️ Ignored unmapped key (focused listener) event: {:?}",
+                key
+            );
+            ""
+        }
     }
 }
 
@@ -161,7 +168,11 @@ pub fn start_focused_keyboard_listener(
                 for key in current_keys.difference(&prev_keys) {
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
-                        let event = InputEvent { code: key_code.to_string(), is_down: true };
+                        let event = InputEvent {
+                            code: key_code.to_string(),
+                            is_down: true,
+                            received_at: Instant::now(),
+                        };
                         match keyboard_tx.send(event) {
                             Ok(()) => log::debug!("Key press detected: {}", key_code),
                             Err(e) => log::error!("Failed to send key press '{}': {}", key_code, e),
@@ -175,7 +186,11 @@ pub fn start_focused_keyboard_listener(
                 for key in prev_keys.difference(&current_keys) {
                     let key_code = map_device_query_keycode(*key);
                     if !key_code.is_empty() {
-                        let event = InputEvent { code: key_code.to_string(), is_down: false };
+                        let event = InputEvent {
+                            code: key_code.to_string(),
+                            is_down: false,
+                            received_at: Instant::now(),
+                        };
                         match keyboard_tx.send(event) {
                             Ok(()) => log::debug!("Key release detected: {}", key_code),
                             Err(e) => {

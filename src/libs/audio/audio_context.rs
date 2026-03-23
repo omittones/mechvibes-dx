@@ -22,9 +22,6 @@ pub struct AudioContext {
     pub(crate) key_sinks: Arc<Mutex<HashMap<String, Sink>>>,
     pub(crate) mouse_sinks: Arc<Mutex<HashMap<String, Sink>>>,
     pub(crate) device_manager: DeviceManager,
-    // Timing tracking for rapid event detection
-    pub(crate) last_keyboard_sound_time: Arc<Mutex<Option<Instant>>>,
-    pub(crate) last_mouse_sound_time: Arc<Mutex<Option<Instant>>>,
 }
 
 // Safety: OutputStream contains a cpal::Stream with a raw pointer kept alive purely for RAII.
@@ -93,8 +90,6 @@ impl AudioContext {
             key_sinks: Arc::new(Mutex::new(HashMap::new())),
             mouse_sinks: Arc::new(Mutex::new(HashMap::new())),
             device_manager,
-            last_keyboard_sound_time: Arc::new(Mutex::new(None)),
-            last_mouse_sound_time: Arc::new(Mutex::new(None)),
         };
         // Initialize volume from config
         let config = AppConfig::load();
@@ -163,6 +158,11 @@ impl AudioContext {
             .unwrap_or(1.0)
     }
 
+    pub(crate) fn log_sound_latency(&self, event: &str, received_at: Instant) {
+        let ms = received_at.elapsed().as_secs_f32() * 1000.0;
+        log::debug!("⏱️ Sound '{}' input latency: {:.3} ms", event, ms,);
+    }
+
     pub fn create_with_device(device_id: Option<String>) -> Result<Self, String> {
         // Initialize device manager
         let device_manager = DeviceManager::new();
@@ -203,8 +203,6 @@ impl AudioContext {
             key_sinks: Arc::new(Mutex::new(HashMap::new())),
             mouse_sinks: Arc::new(Mutex::new(HashMap::new())),
             device_manager,
-            last_keyboard_sound_time: Arc::new(Mutex::new(None)),
-            last_mouse_sound_time: Arc::new(Mutex::new(None)),
         };
 
         // Initialize volume from config

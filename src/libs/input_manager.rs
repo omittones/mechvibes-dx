@@ -1,12 +1,15 @@
 /// Global input manager to handle input channels between main and UI
 use crossbeam_channel as channel;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 
 /// A single keyboard or mouse event flowing through the input channels.
 #[derive(Clone, Debug)]
 pub struct InputEvent {
     pub code: String,
     pub is_down: bool,
+    /// Monotonic time when the listener sent this event into the channel.
+    pub received_at: Instant,
 }
 
 /// Static global holder for input channels

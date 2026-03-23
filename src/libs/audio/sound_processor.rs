@@ -35,7 +35,7 @@ pub fn start_sound_processor(
                 loop {
                     match keyboard_rx.recv() {
                         Ok(event) => {
-                            ctx.play_key_event_sound(&event.code, event.is_down);
+                            ctx.play_key_event_sound(&event.code, event.is_down, event.received_at);
                             let _ = ui_keyboard_tx.send(event);
                         }
                         Err(_) => break,
@@ -57,7 +57,7 @@ pub fn start_sound_processor(
                 loop {
                     match mouse_rx.recv() {
                         Ok(event) => {
-                            ctx.play_mouse_event_sound(&event.code, event.is_down);
+                            ctx.play_mouse_event_sound(&event.code, event.is_down, event.received_at);
                         }
                         Err(_) => break,
                     }
