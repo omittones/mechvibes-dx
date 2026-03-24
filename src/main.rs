@@ -9,12 +9,14 @@ mod utils;
 use crossbeam_channel as channel;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder};
 use dioxus::prelude::*;
-use libs::input_manager::{init_input_channels, init_window_focus_state_with_value};
+use libs::input_manager::{InputEvent, init_input_channels, init_window_focus_state_with_value};
 use libs::start_listeners;
 use libs::ui;
 use libs::window_manager::{WINDOW_MANAGER, WindowAction};
 use std::sync::mpsc;
 use utils::constants::APP_NAME;
+
+use crate::state::config::AppConfig;
 
 // Use .ico format for better Windows compatibility
 const EMBEDDED_ICON: &[u8] = include_bytes!("../assets/icon.ico");
@@ -95,9 +97,10 @@ fn main() {
     log::debug!("🔍 Command line args: {:?}", args);
 
     // Check if we should start minimized (from auto-startup)
-    let should_start_minimized = args.contains(&"--minimized".to_string())
-        || (state::config::AppConfig::load().auto_start
-            && state::config::AppConfig::load().start_minimized);
+    let should_start_minimized = {
+        let config = AppConfig::get();
+        args.contains(&"--minimized".to_string()) || (config.auto_start && config.start_minimized)
+    };
 
     // Register protocol on first run
     // if let Err(e) = protocol::register_protocol() {
@@ -121,8 +124,8 @@ fn main() {
     // to ensure proper Dioxus runtime context
 
     // Create input event channels for communication between input listener and UI
-    let (keyboard_tx, keyboard_rx) = channel::unbounded::<String>();
-    let (mouse_tx, mouse_rx) = channel::unbounded::<String>();
+    let (keyboard_tx, keyboard_rx) = channel::unbounded::<InputEvent>();
+    let (mouse_tx, mouse_rx) = channel::unbounded::<InputEvent>();
     let (hotkey_tx, hotkey_rx) = channel::unbounded::<String>();
 
     // Initialize global input channels for UI to access (including senders for window events)

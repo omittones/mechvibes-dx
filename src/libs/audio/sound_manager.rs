@@ -1,19 +1,25 @@
-use rodio::buffer::SamplesBuffer;
 use rodio::Sink;
+use rodio::buffer::SamplesBuffer;
 use std::collections::HashMap;
+use std::time::Instant;
 
 use super::audio_context::AudioContext;
 use crate::state::config::AppConfig;
 
 impl AudioContext {
-    pub fn play_key_event_sound(&self, key: &str, is_keydown: bool) {
-        
-
+    pub fn play_key_event_sound(&self, key: &str, is_keydown: bool, received_at: Instant) {
         // Check enable_sound from config before playing audio
-        let config = AppConfig::load();
+        let config = AppConfig::get();
         if !config.enable_sound || !config.enable_keyboard_sound {
+            log::debug!(
+                "🔇 Sound disabled, skipping key event sound for key '{}'",
+                key
+            );
             return;
         }
+
+        // Drop config to avoid holding the lock for too long
+        drop(config);
 
         let mut pressed = self.key_pressed.lock().unwrap();
         if is_keydown {
@@ -27,7 +33,9 @@ impl AudioContext {
             }
             pressed.insert(key.to_string(), false);
         }
-        drop(pressed); // Get timestamp and end time
+        drop(pressed);
+
+        // Get timestamp and end time
         let key_map = self.key_map.lock().unwrap();
         let (start, end) = match key_map.get(key) {
             Some(arr) if arr.len() == 2 => {
@@ -39,14 +47,10 @@ impl AudioContext {
 
                 // Debug logging for problematic keys
                 if start < 0.0 || duration <= 0.0 || duration > 10000.0 {
-                    log::error!(
+                    log::warn!(
                         "⚠️ Suspicious mapping for key '{}' ({}): start={:.3}ms, end={:.3}ms, duration={:.3}ms (raw: [{}, {}])",
                         key,
-                        if is_keydown {
-                            "down"
-                        } else {
-                            "up"
-                        },
+                        if is_keydown { "down" } else { "up" },
                         start,
                         end,
                         duration,
@@ -69,7 +73,7 @@ impl AudioContext {
 
                 // Debug logging for problematic keys
                 if start < 0.0 || duration <= 0.0 || duration > 10000.0 {
-                    log::error!(
+                    log::warn!(
                         "⚠️ Suspicious mapping for key '{}': start={:.3}ms, end={:.3}ms, duration={:.3}ms (raw: [{}, {}])",
                         key,
                         start,
@@ -84,22 +88,37 @@ impl AudioContext {
             }
             Some(arr) => {
                 log::error!(
-                    "Invalid mapping for key '{}': expected 1-2 elements, got {}",
+                    "❌ Invalid mapping for key '{}': expected 1-2 elements, got {}",
                     key,
                     arr.len()
                 );
                 return;
             }
             None => {
-                // Silently ignore unmapped keys to reduce noise
+                log::debug!("🔍 Ignoring unmapped key '{}'", key);
                 return;
             }
         };
         drop(key_map);
 
-        self.play_sound_segment(key, start, end, is_keydown);
+        self.play_sound_segment(key, start, end, is_keydown, received_at);
     }
-    fn play_sound_segment(&self, key: &str, start: f32, end: f32, is_keydown: bool) {
+
+    fn play_sound_segment(
+        &self,
+        key: &str,
+        start: f32,
+        end: f32,
+        is_keydown: bool,
+        received_at: Instant,
+    ) {
+        log::debug!(
+            "Playing sound for key '{}': start={:.3}ms, end={:.3}ms",
+            key,
+            start,
+            end,
+        );
+
         let pcm_opt = self.keyboard_samples.lock().unwrap().clone();
         if let Some((samples, channels, sample_rate)) = pcm_opt {
             // Calculate total audio duration in milliseconds
@@ -155,9 +174,8 @@ impl AudioContext {
             }
 
             // Calculate sample positions (convert milliseconds to seconds for sample calculation)
-            let start_sample = ((start / 1000.0) *
-                (sample_rate as f32) *
-                (channels as f32)) as usize;
+            let start_sample =
+                ((start / 1000.0) * (sample_rate as f32) * (channels as f32)) as usize;
             let end_sample = ((end / 1000.0) * (sample_rate as f32) * (channels as f32)) as usize;
 
             // Validate sample range with safety checks
@@ -166,8 +184,8 @@ impl AudioContext {
                 let max_available_sample = samples.len();
                 let clamped_end_sample = max_available_sample;
                 let clamped_end_time =
-                    ((clamped_end_sample as f32) / (sample_rate as f32) / (channels as f32)) *
-                    1000.0;
+                    ((clamped_end_sample as f32) / (sample_rate as f32) / (channels as f32))
+                        * 1000.0;
                 let clamped_duration = clamped_end_time - start;
 
                 // Use clamped values if they're reasonable
@@ -178,12 +196,13 @@ impl AudioContext {
                     if let Ok(sink) = Sink::try_new(&self.stream_handle) {
                         sink.set_volume(self.get_volume());
                         sink.append(segment);
+                        self.log_sound_latency(key, received_at);
 
                         let mut key_sinks = self.key_sinks.lock().unwrap();
                         self.manage_active_sinks(&mut key_sinks);
                         key_sinks.insert(
                             format!("{}-{}", key, if is_keydown { "down" } else { "up" }),
-                            sink
+                            sink,
                         );
                     }
                     return;
@@ -216,12 +235,13 @@ impl AudioContext {
             if let Ok(sink) = Sink::try_new(&self.stream_handle) {
                 sink.set_volume(self.get_volume());
                 sink.append(segment);
+                self.log_sound_latency(key, received_at);
 
                 let mut key_sinks = self.key_sinks.lock().unwrap();
                 self.manage_active_sinks(&mut key_sinks);
                 key_sinks.insert(
                     format!("{}-{}", key, if is_keydown { "down" } else { "up" }),
-                    sink
+                    sink,
                 );
             }
         } else {
@@ -252,9 +272,9 @@ impl AudioContext {
         }
     }
 
-    pub fn play_mouse_event_sound(&self, button: &str, is_buttondown: bool) {
+    pub fn play_mouse_event_sound(&self, button: &str, is_buttondown: bool, received_at: Instant) {
         // Check enable_sound from config before playing audio
-        let config = AppConfig::load();
+        let config = AppConfig::get();
         if !config.enable_sound || !config.enable_mouse_sound {
             return;
         }
@@ -310,7 +330,7 @@ impl AudioContext {
         };
         drop(mouse_map);
 
-        self.play_mouse_sound_segment(button, start, duration, is_buttondown);
+        self.play_mouse_sound_segment(button, start, duration, is_buttondown, received_at);
     }
 
     fn play_mouse_sound_segment(
@@ -318,7 +338,8 @@ impl AudioContext {
         button: &str,
         start: f32,
         duration: f32,
-        is_buttondown: bool
+        is_buttondown: bool,
+        received_at: Instant,
     ) {
         let pcm_opt = self.mouse_samples.lock().unwrap().clone();
         if let Some((samples, channels, sample_rate)) = pcm_opt {
@@ -365,16 +386,17 @@ impl AudioContext {
             let end_time = start + duration;
 
             // Calculate sample positions (convert milliseconds to seconds for sample calculation)
-            let start_sample = ((start / 1000.0) *
-                (sample_rate as f32) *
-                (channels as f32)) as usize;
-            let end_sample = ((end_time / 1000.0) *
-                (sample_rate as f32) *
-                (channels as f32)) as usize;
+            let start_sample =
+                ((start / 1000.0) * (sample_rate as f32) * (channels as f32)) as usize;
+            let end_sample =
+                ((end_time / 1000.0) * (sample_rate as f32) * (channels as f32)) as usize;
 
             // Validate sample range
             if end_sample > samples.len() {
-                log::error!("❌ TIMING ERROR: Audio segment exceeds sample buffer for mouse button '{}'", button);
+                log::error!(
+                    "❌ TIMING ERROR: Audio segment exceeds sample buffer for mouse button '{}'",
+                    button
+                );
                 log::error!(
                     "   Requested samples: {}..{}, Available: {} samples",
                     start_sample,
@@ -407,12 +429,13 @@ impl AudioContext {
             if let Ok(sink) = Sink::try_new(&self.stream_handle) {
                 sink.set_volume(self.get_mouse_volume());
                 sink.append(segment);
+                self.log_sound_latency(button, received_at);
 
                 let mut mouse_sinks = self.mouse_sinks.lock().unwrap();
                 self.manage_active_mouse_sinks(&mut mouse_sinks);
                 mouse_sinks.insert(
                     format!("{}-{}", button, if is_buttondown { "down" } else { "up" }),
-                    sink
+                    sink,
                 );
             }
         } else {
@@ -422,7 +445,7 @@ impl AudioContext {
 
     fn manage_active_mouse_sinks(
         &self,
-        mouse_sinks: &mut std::sync::MutexGuard<HashMap<String, Sink>>
+        mouse_sinks: &mut std::sync::MutexGuard<HashMap<String, Sink>>,
     ) {
         // First, clean up finished sinks (those that have stopped playing)
         let finished_buttons: Vec<String> = mouse_sinks

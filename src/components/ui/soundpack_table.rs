@@ -1,7 +1,8 @@
+use crate::libs::audio::load_soundpack_from_config;
+use crate::libs::soundpack::cache::SoundpackMetadata;
+use crate::libs::soundpack::cache::SoundpackRef;
 use crate::state::app::use_state_trigger;
-use crate::state::paths;
-use crate::state::soundpack::{SoundpackMetadata, SoundpackType};
-use crate::utils::path::{directory_exists, open_path};
+use crate::utils::path::open_path;
 use dioxus::document::eval;
 use dioxus::prelude::*;
 use lucide_dioxus::{FolderOpen, Music, Plus, RefreshCw, Trash};
@@ -11,10 +12,13 @@ use super::ConfirmDeleteModal;
 
 /// Open a soundpack folder in the system file manager
 /// Opens the specific soundpack folder
-fn open_soundpack_folder(soundpack_id: &str, is_mouse: bool) -> Result<(), String> {
+fn open_soundpack_folder(soundpack_id: &SoundpackRef) -> Result<(), String> {
     use std::path::PathBuf;
 
-    let soundpack_path = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
+    let soundpack_path = soundpack_id
+        .to_soundpack_path()
+        .to_string_lossy()
+        .to_string();
 
     // Normalize path separators for Windows
     let normalized_path = PathBuf::from(&soundpack_path);
@@ -37,19 +41,22 @@ fn open_soundpack_folder(soundpack_id: &str, is_mouse: bool) -> Result<(), Strin
 }
 
 /// Delete a soundpack directory and all its contents
-fn delete_soundpack(soundpack_id: &str, is_mouse: bool) -> Result<(), String> {
-    let soundpack_path = paths::soundpacks::find_soundpack_dir(soundpack_id, is_mouse);
+fn delete_soundpack(id: &SoundpackRef) -> Result<(), String> {
+    let soundpack_path = id.to_soundpack_path();
 
     // Check if the directory exists
-    if !directory_exists(&soundpack_path) {
-        return Err(format!("Soundpack directory not found: {}", soundpack_path));
+    if !soundpack_path.exists() {
+        return Err(format!(
+            "Soundpack directory not found: {}",
+            soundpack_path.display()
+        ));
     }
 
     // Remove the entire directory
     std::fs::remove_dir_all(&soundpack_path)
         .map_err(|e| format!("Failed to delete soundpack directory: {}", e))?;
 
-    log::info!("🗑️ Successfully deleted soundpack: {}", soundpack_id);
+    log::info!("🗑️ Successfully deleted soundpack: {}", id);
     Ok(())
 }
 
@@ -76,7 +83,7 @@ pub fn SoundpackTable(
             .iter()
             .filter(|pack| {
                 pack.name.to_lowercase().contains(&query)
-                    || pack.id.to_lowercase().contains(&query)
+                    || pack.id.id.contains(&query)
                     || pack
                         .author
                         .as_ref()
@@ -111,7 +118,7 @@ pub fn SoundpackTable(
                 log::debug!("🔄 Refreshing soundpack cache...");
 
                 // Reload soundpacks in audio context
-                crate::state::app::reload_current_soundpacks(&audio_ctx);
+                let _ = load_soundpack_from_config(&audio_ctx, true);
 
                 // Trigger state update to refresh UI
                 state_trigger.call(());
@@ -123,58 +130,58 @@ pub fn SoundpackTable(
     };
 
     rsx! {
-      div { class: "space-y-4",
-        // Search field
-        div { class: "flex items-center px-3 gap-2",
-          input {
-            class: "input input-sm w-full",
-            placeholder: "Search {soundpack_type.to_lowercase()} sound packs...",
-            value: "{search_query}",
-            oninput: move |evt| search_query.set(evt.value()),
-          }
-          button {
-            class: "btn btn-sm btn-ghost",
-            disabled: refreshing_soundpacks(),
-            onclick: refresh_soundpacks_cache,
-            title: "Refresh sound pack list",
-            if refreshing_soundpacks() {
-              span { class: "loading loading-spinner loading-xs" }
-            } else {
-              RefreshCw { class: "w-4 h-4" }
-            }
-          }
-          if let Some(add_handler) = on_add_click {
-            button {
-              class: "btn btn-sm btn-neutral",
-              onclick: move |evt| add_handler.call(evt),
-              Plus { class: "w-4 h-4 mr-2" }
-              "Add"
-            }
-          }
-        }
-        if soundpacks.is_empty() {
-          div { class: "p-4 text-center text-sm text-base-content/70",
-            "No {soundpack_type} sound pack found. You can add new sound packs by clicking the 'Add' button above."
-          }
-        } else {
-          // Table
-          div { class: "overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)] -mb-1",
-            if filtered_soundpacks.is_empty() {
-              div { class: "p-4 text-center text-sm text-base-content/70",
-                "No result match your search!"
-              }
-            } else {
-              table { class: "table table-sm w-full",
-                tbody {
-                  for pack in filtered_soundpacks {
-                    SoundpackTableRow { soundpack: pack }
-                  }
+        div { class: "space-y-4",
+            // Search field
+            div { class: "flex items-center px-3 gap-2",
+                input {
+                    class: "input input-sm w-full",
+                    placeholder: "Search {soundpack_type.to_lowercase()} sound packs...",
+                    value: "{search_query}",
+                    oninput: move |evt| search_query.set(evt.value()),
                 }
-              }
+                button {
+                    class: "btn btn-sm btn-ghost",
+                    disabled: refreshing_soundpacks(),
+                    onclick: refresh_soundpacks_cache,
+                    title: "Refresh sound pack list",
+                    if refreshing_soundpacks() {
+                        span { class: "loading loading-spinner loading-xs" }
+                    } else {
+                        RefreshCw { class: "w-4 h-4" }
+                    }
+                }
+                if let Some(add_handler) = on_add_click {
+                    button {
+                        class: "btn btn-sm btn-neutral",
+                        onclick: move |evt| add_handler.call(evt),
+                        Plus { class: "w-4 h-4 mr-2" }
+                        "Add"
+                    }
+                }
             }
-          }
+            if soundpacks.is_empty() {
+                div { class: "p-4 text-center text-sm text-base-content/70",
+                    "No {soundpack_type} sound pack found. You can add new sound packs by clicking the 'Add' button above."
+                }
+            } else {
+                // Table
+                div { class: "overflow-x-auto overflow-y-auto max-h-[calc(100vh-400px)] -mb-1",
+                    if filtered_soundpacks.is_empty() {
+                        div { class: "p-4 text-center text-sm text-base-content/70",
+                            "No result match your search!"
+                        }
+                    } else {
+                        table { class: "table table-sm w-full",
+                            tbody {
+                                for pack in filtered_soundpacks {
+                                    SoundpackTableRow { soundpack: pack }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
-      }
     }
 }
 
@@ -182,137 +189,118 @@ pub fn SoundpackTable(
 pub fn SoundpackTableRow(soundpack: SoundpackMetadata) -> Element {
     let state_trigger = use_state_trigger();
 
-    // Handlers for button clicks
-    let on_open_folder = {
-        let folder_path = soundpack.folder_path.clone();
-        let soundpack_id = soundpack.id.clone();
-        let soundpack_name = soundpack.name.clone();
-        move |_| {
-            let folder_path = folder_path.clone();
-            let soundpack_id = soundpack_id.clone();
-            let soundpack_name = soundpack_name.clone();
-            spawn(async move {
-                log::debug!("🔍 Soundpack info:");
-                log::info!("Name: {}", soundpack_name);
-                log::info!("ID: {}", soundpack_id);
-                log::info!("Folder path: {}", folder_path);
+    let soundpack_id = soundpack.id.clone();
+    let soundpack_name = soundpack.name.clone();
+    let on_open_folder_click = move |_| {
+        let soundpack_name = soundpack_name.clone();
+        let soundpack_id = soundpack_id.clone();
 
-                // Use folder_path if not empty, otherwise fall back to id
-                let path_to_use = if !folder_path.is_empty() {
-                    folder_path
-                } else {
-                    soundpack_id.clone()
-                };
+        spawn(async move {
+            log::debug!("🔍 Soundpack info:");
+            log::info!("ID: {}", soundpack_id);
+            log::info!("Name: {}", soundpack_name);
 
-                match open_soundpack_folder(
-                    &path_to_use,
-                    soundpack.soundpack_type == SoundpackType::Mouse,
-                ) {
-                    Ok(_) => log::info!(
-                        "✅ Successfully opened folder for soundpack: {}",
-                        soundpack_name
-                    ),
-                    Err(e) => log::error!(
-                        "❌ Failed to open folder for soundpack {}: {}",
-                        soundpack_name,
-                        e
-                    ),
-                }
-            });
-        }
+            match open_soundpack_folder(&soundpack_id) {
+                Ok(_) => log::info!(
+                    "✅ Successfully opened folder for soundpack: {}",
+                    soundpack_name
+                ),
+                Err(e) => log::error!(
+                    "❌ Failed to open folder for soundpack {}: {}",
+                    soundpack_name,
+                    e
+                ),
+            }
+        });
     };
 
     // Handler for delete button click
-    let on_confirm_delete = {
-        let soundpack_id = soundpack.id.clone();
-        let trigger = state_trigger.clone();
-        move |_| {
-            let soundpack_id = soundpack_id.clone();
-            let trigger = trigger.clone();
-            spawn(async move {
-                match delete_soundpack(
-                    &soundpack_id,
-                    soundpack.soundpack_type == SoundpackType::Mouse,
-                ) {
-                    Ok(_) => {
-                        log::info!("✅ Successfully deleted soundpack: {}", soundpack_id);
-                        // The modal will close automatically due to form method="dialog"
-                        // Trigger state refresh to update the UI
-                        trigger.call(());
-                    }
-                    Err(e) => {
-                        log::error!("❌ Failed to delete soundpack {}: {}", soundpack_id, e);
-                        // Could show an error modal here if needed
-                    }
+    let soundpack_id = soundpack.id.clone();
+    let trigger = state_trigger.clone();
+    let on_confirm_delete = move || {
+        let soundpack_id = soundpack_id.clone();
+        let trigger = trigger.clone();
+        spawn(async move {
+            match delete_soundpack(&soundpack_id) {
+                Ok(_) => {
+                    log::info!("✅ Successfully deleted soundpack: {}", soundpack_id);
+                    // The modal will close automatically due to form method="dialog"
+                    // Trigger state refresh to update the UI
+                    trigger.call(());
                 }
-            });
-        }
+                Err(e) => {
+                    log::error!("❌ Failed to delete soundpack {}: {}", soundpack_id, e);
+                    // Could show an error modal here if needed
+                }
+            }
+        });
     };
+
     rsx! {
-      tr { class: "hover:bg-base-100",
-        td { class: "flex items-center gap-4",
-          // Icon
-          div { class: "flex items-center justify-center",
-            if let Some(icon) = &soundpack.icon {
-              if !icon.is_empty() {
-                div { class: "w-8 h-8 rounded-box overflow-hidden",
-                  img {
-                    class: "w-full h-full object-cover",
-                    src: "{icon}",
-                    alt: "{soundpack.name}",
-                  }
+        tr { class: "hover:bg-base-100",
+            td { class: "flex items-center gap-4",
+                // Icon
+                div { class: "flex items-center justify-center",
+                    if let Some(icon) = &soundpack.icon {
+                        if !icon.is_empty() {
+                            div { class: "w-8 h-8 rounded-box overflow-hidden",
+                                img {
+                                    class: "w-full h-full object-cover",
+                                    src: "{icon}",
+                                    alt: "{soundpack.name}",
+                                }
+                            }
+                        } else {
+                            div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
+                                Music { class: "w-4 h-4 text-base-content/40" }
+                            }
+                        }
+                    } else {
+                        div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
+                            Music { class: "w-4 h-4 text-base-content/40" }
+                        }
+                    }
                 }
-              } else {
-                div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
-                  Music { class: "w-4 h-4 text-base-content/40" }
+                // Name
+                div {
+                    div { class: "font-medium text-sm text-base-content line-clamp-1",
+                        "{soundpack.name}"
+                    }
+                    if let Some(author) = &soundpack.author {
+                        div { class: "text-xs text-base-content/50", "by {author}" }
+                    }
                 }
-              }
-            } else {
-              div { class: "w-8 h-8 rounded-box bg-base-300 flex items-center justify-center",
-                Music { class: "w-4 h-4 text-base-content/40" }
-              }
             }
-          }
-          // Name
-          div {
-            div { class: "font-medium text-sm text-base-content line-clamp-1",
-              "{soundpack.name}"
+            // Actions
+            td {
+                div { class: "flex items-center justify-end gap-1",
+                    button {
+                        class: "btn btn-soft btn-xs",
+                        title: "Open soundpack folder",
+                        onclick: on_open_folder_click,
+                        FolderOpen { class: "w-4 h-4" }
+                    }
+                    button {
+                        class: "btn btn-soft btn-error btn-xs",
+                        title: "Delete this soundpack",
+                        onclick: move |_| {
+                            eval(
+                                &format!(
+                                    "document.getElementById(\"confirm_delete_modal_{}\").showModal()",
+                                    soundpack.id,
+                                ),
+                            );
+                        },
+                        Trash { class: "w-4 h-4" }
+                    }
+                }
             }
-            if let Some(author) = &soundpack.author {
-              div { class: "text-xs text-base-content/50", "by {author}" }
-            }
-          }
         }
-        // Actions
-        td {
-          div { class: "flex items-center justify-end gap-1",
-            button {
-              class: "btn btn-soft btn-xs",
-              title: "Open soundpack folder",
-              onclick: on_open_folder,
-              FolderOpen { class: "w-4 h-4" }
-            }
-            button {
-              class: "btn btn-soft btn-error btn-xs",
-              title: "Delete this soundpack",
-              onclick: move |_| {
-                  eval(
-                      &format!(
-                          "document.getElementById(\"confirm_delete_modal_{}\").showModal()",
-                          soundpack.id,
-                      ),
-                  );
-              },
-              Trash { class: "w-4 h-4" }
-            }
-          }
+        // Delete confirmation modal
+        ConfirmDeleteModal {
+            modal_id: format!("confirm_delete_modal_{}", soundpack.id),
+            soundpack_name: soundpack.name.clone(),
+            on_confirm: on_confirm_delete,
         }
-      }
-      // Delete confirmation modal
-      ConfirmDeleteModal {
-        modal_id: format!("confirm_delete_modal_{}", soundpack.id),
-        soundpack_name: soundpack.name.clone(),
-        on_confirm: on_confirm_delete,
-      }
     }
 }

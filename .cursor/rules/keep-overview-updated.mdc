@@ -1,0 +1,16 @@
+---
+description: Remind agent to update the project overview rule after structural changes
+alwaysApply: true
+---
+
+# Keep Project Overview Updated
+
+After making changes that affect the project's structure or architecture, update `.cursor/rules/project-overview.mdc` to reflect them. This includes:
+
+- Adding, removing, or renaming modules, files, or directories
+- Introducing new crates, dependencies, or feature flags
+- Changing routing, state management patterns, or IPC mechanisms
+- Altering build commands or configuration files
+- Adding new global singletons or context providers
+
+Do not update the overview for routine bug fixes or minor edits within existing modules.

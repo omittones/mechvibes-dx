@@ -23,8 +23,7 @@ pub const APP_PROTOCOL_URL: &str = "mechvibes://";
 pub const APP_DESCRIPTION_SHORT: &str = "MechvibesDX";
 
 /// Long description of the application
-pub const APP_DESCRIPTION_LONG: &str =
-    "MechvibesDX is a modern, cross-platform soundboard for mechanical keyboards. It supports a wide range of keyboard sounds and is designed to be user-friendly and customizable.";
+pub const APP_DESCRIPTION_LONG: &str = "MechvibesDX is a modern, cross-platform soundboard for mechanical keyboards. It supports a wide range of keyboard sounds and is designed to be user-friendly and customizable.";
 
 /// Version of the application (should match Cargo.toml)
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");

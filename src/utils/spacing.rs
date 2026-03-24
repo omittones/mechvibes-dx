@@ -19,4 +19,3 @@ pub const GAP_SPACING: &str = "gap-2";
 /// Get card padding classes
 /// 16px
 pub const CARD_PADDING: &str = "p-4";
-

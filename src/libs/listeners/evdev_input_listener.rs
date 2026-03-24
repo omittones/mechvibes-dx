@@ -3,16 +3,18 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use crate::libs::input_manager::InputEvent;
+use std::time::Instant;
+
 #[cfg(target_os = "linux")]
 pub fn start_evdev_keyboard_listener(
-    keyboard_tx: channel::Sender<String>,
+    keyboard_tx: channel::Sender<InputEvent>,
     hotkey_tx: channel::Sender<String>,
     _is_focused: Arc<Mutex<bool>>,
 ) {
+    use evdev::{EventType, KeyCode};
     thread::spawn(move || {
-        use evdev::{EventType, KeyCode};
-
-        log::debug!("🔍 [evdev] Starting Linux keyboard listener (Wayland/X11 compatible)");
+        log::debug!("🔍 Starting Linux keyboard listener (Wayland/X11 compatible)");
 
         // Track modifier keys for hotkey detection
         let mut ctrl_pressed = false;
@@ -24,7 +26,7 @@ pub fn start_evdev_keyboard_listener(
         let devices: Vec<_> = evdev::enumerate().collect();
         if devices.is_empty() {
             log::error!(
-                "❌ [evdev] No devices found, make sure you have permission to access /dev/input/event*"
+                "❌ No devices found, make sure you have permission to access /dev/input/event*"
             );
             return;
         }
@@ -33,7 +35,7 @@ pub fn start_evdev_keyboard_listener(
             // Check if device has keyboard capabilities
             if device.supported_keys().is_some() {
                 log::info!(
-                    "🔍 [evdev] Found keyboard device: {:?} - {}",
+                    "🔍 Found keyboard device: {:?} - {}",
                     path.display(),
                     device.name().unwrap_or("Unknown")
                 );
@@ -41,7 +43,7 @@ pub fn start_evdev_keyboard_listener(
                 // Set device to non-blocking mode to prevent blocking on idle devices
                 if let Err(e) = device.set_nonblocking(true) {
                     log::error!(
-                        "⚠️ [evdev] Failed to set non-blocking mode for {:?}: {}",
+                        "⚠️ Failed to set non-blocking mode for {:?}: {}",
                         path.display(),
                         e
                     );
@@ -53,15 +55,12 @@ pub fn start_evdev_keyboard_listener(
 
         if keyboards.is_empty() {
             log::error!(
-                "❌ [evdev] No keyboard devices found, make sure you have permission to access /dev/input/event*!"
+                "❌ No keyboard devices found, make sure you have permission to access /dev/input/event*!"
             );
             return;
         }
 
-        log::info!(
-            "🔍 [evdev] Monitoring {} keyboard device(s)",
-            keyboards.len()
-        );
+        log::info!("🔍 Monitoring {} keyboard device(s)", keyboards.len());
 
         // Monitor all keyboards in a loop
         loop {
@@ -89,15 +88,15 @@ pub fn start_evdev_keyboard_listener(
                                                 // Check for Ctrl+Alt+M hotkey combination
                                                 if ctrl_pressed && alt_pressed {
                                                     log::info!(
-                                                        "🔥 [evdev] Hotkey detected: Ctrl+Alt+M - Toggling global sound"
+                                                        "🔥 Hotkey detected: Ctrl+Alt+M - Toggling global sound"
                                                     );
                                                     match hotkey_tx.send("TOGGLE_SOUND".to_string())
                                                     {
                                                         Ok(()) => log::debug!(
-                                                            "[evdev] Hotkey event sent successfully"
+                                                            "Hotkey event sent successfully"
                                                         ),
                                                         Err(e) => log::error!(
-                                                            "[evdev] Failed to send hotkey event: {}",
+                                                            "Failed to send hotkey event: {}",
                                                             e
                                                         ),
                                                     }
@@ -108,13 +107,17 @@ pub fn start_evdev_keyboard_listener(
                                         }
 
                                         // Send key press event
-                                        match keyboard_tx.send(key_code.to_string()) {
-                                            Ok(()) => log::debug!(
-                                                "[evdev] Key press detected: {}",
-                                                key_code
-                                            ),
+                                        let event = InputEvent {
+                                            code: key_code.to_string(),
+                                            is_down: true,
+                                            received_at: Instant::now(),
+                                        };
+                                        match keyboard_tx.send(event) {
+                                            Ok(()) => {
+                                                log::debug!("Key press detected: {}", key_code)
+                                            }
                                             Err(e) => log::error!(
-                                                "[evdev] Failed to send key press '{}': {}",
+                                                "Failed to send key press '{}': {}",
                                                 key_code,
                                                 e
                                             ),
@@ -134,13 +137,17 @@ pub fn start_evdev_keyboard_listener(
                                         }
 
                                         // Send key release event
-                                        match keyboard_tx.send(format!("UP:{}", key_code)) {
-                                            Ok(()) => log::debug!(
-                                                "[evdev] Key release detected: {}",
-                                                key_code
-                                            ),
+                                        let event = InputEvent {
+                                            code: key_code.to_string(),
+                                            is_down: false,
+                                            received_at: Instant::now(),
+                                        };
+                                        match keyboard_tx.send(event) {
+                                            Ok(()) => {
+                                                log::debug!("Key release detected: {}", key_code)
+                                            }
                                             Err(e) => log::error!(
-                                                "[evdev] Failed to send key release '{}': {}",
+                                                "Failed to send key release '{}': {}",
                                                 key_code,
                                                 e
                                             ),
@@ -148,7 +155,7 @@ pub fn start_evdev_keyboard_listener(
                                     }
                                     // Ignore key repeat (value == 2)
                                 } else {
-                                    log::debug!("[evdev] Ignored unmapped key event: {:?}", key);
+                                    log::debug!("Ignored unmapped key event: {:?}", key);
                                 }
                             }
                         }
@@ -157,7 +164,7 @@ pub fn start_evdev_keyboard_listener(
                         // No events available, this is normal
                     }
                     Err(e) => {
-                        log::error!("⚠️[evdev] Error fetching events: {}", e);
+                        log::error!("⚠️Error fetching events: {}", e);
                     }
                 }
             }
@@ -270,6 +277,9 @@ fn map_evdev_keycode(key: evdev::KeyCode) -> &'static str {
         KeyCode::KEY_DOT => "Period",
         KeyCode::KEY_SLASH => "Slash",
 
-        _ => "",
+        _ => {
+            log::debug!("⚠️ Ignored unmapped key event (evdev listener): {:?}", key);
+            ""
+        }
     }
 }

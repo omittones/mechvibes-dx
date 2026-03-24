@@ -1,0 +1,113 @@
+---
+description: MechvibesDX project overview and architecture for agent onboarding
+alwaysApply: true
+---
+
+# MechvibesDX
+
+Desktop app that plays mechanical keyboard/mouse sounds on input events. Built with **Rust** + **Dioxus 0.7** (React-like desktop UI framework). Styled with **Tailwind CSS 4** + **DaisyUI**.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Language | Rust (edition 2024) |
+| UI | Dioxus 0.7.2 (desktop feature) |
+| Audio | rodio, cpal, symphonia (MP3/WAV/OGG/AAC) |
+| Input capture | rdev (global), device_query (focused window), evdev (Linux) |
+| Styling | Tailwind CSS 4 + DaisyUI themes |
+| System tray | tray-icon crate |
+| IPC | crossbeam-channel (input events), std::sync::mpsc (window actions) |
+
+## Project Layout
+
+```
+src/
+├── main.rs                    # Entry point, window setup, channel init
+├── components/                # Dioxus UI components
+│   ├── pages/                 # Route pages: home, customize, soundpacks, mood, settings
+│   ├── ui/                    # Shared UI widgets (modals, tables)
+│   ├── titlebar.rs            # Custom window title bar
+│   ├── dock.rs                # Bottom navigation dock
+│   ├── header.rs, logo.rs     # App header and logo display
+│   ├── volume_slider.rs       # Volume control
+│   ├── soundpack_selector.rs  # Soundpack picker
+│   └── device_selector.rs     # Audio device picker
+├── libs/                      # Core logic
+│   ├── audio/                 # AudioContext, SoundManager, SoundpackLoader
+│   ├── listeners/             # Input listeners (rdev, device_query, evdev)
+│   ├── soundpack/             # Soundpack format, cache, validation, installer
+│   ├── input_manager.rs       # Global input channels + focus state
+│   ├── tray.rs, tray_service.rs  # System tray menu
+│   ├── window_manager.rs      # Window visibility and actions
+│   ├── routes.rs              # Dioxus router (Route enum + Layout)
+│   ├── theme.rs               # DaisyUI theme management
+│   └── ui.rs                  # Root app component (event loop, context providers)
+├── state/                     # App state and persistence
+│   ├── config.rs              # AppConfig (JSON, serde) — all user settings
+│   ├── paths.rs               # File system paths (app root, data dir, soundpacks)
+│   ├── app.rs                 # Global AppState (soundpack cache, OnceCell<Mutex>)
+│   ├── manifest.rs            # App manifest
+│   ├── keyboard.rs            # KeyboardState signal
+│   ├── music.rs, ambiance.rs  # Music/ambiance player state
+│   └── themes.rs              # Theme state
+├── utils/                     # Helpers
+│   ├── constants.rs           # App name, version strings
+│   ├── config.rs              # use_config() / use_fresh_config() hooks
+│   ├── auto_startup.rs        # OS auto-start registration
+│   ├── auto_updater.rs        # GitHub release update checker
+│   └── platform.rs, path.rs   # Platform utilities
+soundpacks/                    # Built-in soundpacks (keyboard/, mouse/)
+assets/                        # Icons, CSS, manifest
+```
+
+## Architecture
+
+### Input Pipeline
+1. `main.rs` creates `crossbeam_channel` pairs for keyboard, mouse, and hotkey events.
+2. Listeners run in background threads: `rdev` captures global input when unfocused; `device_query` captures when the app window is focused (workaround for rdev + Wry/Winit conflict on Windows).
+3. `input_manager::WINDOW_FOCUS_STATE` switches between the two listener modes.
+4. The root `ui::app` component polls channels in a `use_future` loop, triggering sound playback.
+
+### Audio Flow
+1. Input event received from channel.
+2. `AudioContext::play_key_event_sound()` / `play_mouse_event_sound()` called.
+3. `SoundManager` looks up the key/button in `key_map` / `mouse_map` to find audio segments.
+4. Segment is played via rodio `Sink` using pre-decoded audio buffers.
+
+### State Management
+- **AppConfig** (`state/config.rs`): Persisted as JSON in `data/config.json`. All user preferences live here.
+- **use_config() hook** (`utils/config.rs`): Returns `(Signal<AppConfig>, setter_fn)`. Polls for external changes every 100ms.
+- **use_context_provider**: Used in `ui::app` for `AudioContext`, `KeyboardState`, and an update signal.
+- **Global singletons** (OnceLock/OnceCell): `INPUT_CHANNELS`, `WINDOW_FOCUS_STATE`, `WINDOW_MANAGER`, `TRAY_UPDATE_SERVICE`, `GLOBAL_APP_STATE`, volume globals.
+
+### Routing
+`Route` enum in `libs/routes.rs` with `#[derive(Routable)]`:
+- `/` — Home (soundpack display, volume, key visualizer)
+- `/customize` — Logo and background customization
+- `/soundpacks` — Browse and install soundpacks
+- `/mood` — Music and ambiance player
+- `/settings` — App settings, auto-update, auto-start
+
+### Soundpacks
+- Each soundpack has a `config.json` defining key/button-to-audio mappings (time ranges within a single audio file).
+- IDs follow `{origin}/{type}/{name}` format: e.g. `builtin/keyboard/oreo`, `custom/mouse/my-pack`.
+- Built-in packs live under the app root `soundpacks/` dir; custom packs under the OS data directory.
+
+## Build & Run
+
+```bash
+cargo run              # Debug run
+cargo build --release  # Release build
+dx serve               # Dev with hot reload (Dioxus CLI)
+dx build               # Production bundle
+```
+
+## Conventions
+
+- Components use `#[component]` attribute and return `Element`.
+- RSX macro (`rsx! {}`) for templating — similar to JSX.
+- Tailwind + DaisyUI classes for all styling; theme applied via `data-theme` attribute.
+- Logging with `log` crate macros (`log::info!`, `log::debug!`, etc.) with emoji prefixes.
+- Platform-specific code guarded by `#[cfg(target_os = "windows")]` / `#[cfg(target_os = "linux")]`.
+- Feature flags: `desktop` (default), `auto-update` (default).

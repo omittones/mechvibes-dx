@@ -5,7 +5,6 @@
     "definition_method": "single",
     "author": "Mechvibes",
     "icon": "blue.jpg",
-
     "definitions": {
         "AltLeft": {
             "timing": [
@@ -80,6 +79,12 @@
             ]
         },
         "ControlLeft": {
+            "timing": [
+                [35733.0, 35828.0],
+                [35828.0, 35923.0]
+            ]
+        },
+        "MetaLeft": {
             "timing": [
                 [35733.0, 35828.0],
                 [35828.0, 35923.0]

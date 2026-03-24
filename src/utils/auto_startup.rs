@@ -1,4 +1,6 @@
 #[cfg(target_os = "windows")]
+use crate::state::config::AppConfig;
+#[cfg(target_os = "windows")]
 use crate::utils::constants::APP_NAME;
 #[cfg(target_os = "windows")]
 use winreg::RegKey;
@@ -20,7 +22,7 @@ pub fn enable_auto_startup() -> Result<(), String> {
         .ok_or("Failed to convert executable path to string")?;
 
     // Check if we should start minimized
-    let config = crate::state::config::AppConfig::load();
+    let config = AppConfig::get();
     let command = if config.start_minimized {
         format!("\"{}\" --minimized", exe_path_str)
     } else {

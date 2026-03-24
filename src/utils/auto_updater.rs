@@ -6,8 +6,6 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use tokio::time::{Duration as TokioDuration, interval};
 
 // Fixed repository information
@@ -286,28 +284,21 @@ pub async fn check_for_updates_simple() -> Result<UpdateInfo, UpdateError> {
 }
 
 // Service for auto-update background checking
-pub struct UpdateService {
-    config: Arc<Mutex<AppConfig>>,
-}
+pub struct UpdateService {}
 
 impl UpdateService {
-    pub fn new(config: Arc<Mutex<AppConfig>>) -> Self {
-        Self { config }
-    }
-
     pub async fn start(&self) {
-        let config = self.config.clone();
-
         tokio::spawn(async move {
             let mut interval = interval(TokioDuration::from_secs(86400)); // Check every 24 hours
 
             loop {
                 interval.tick().await;
-                let update_config = {
-                    let config_guard = config.lock().await;
-                    config_guard.auto_update.clone()
-                }; // Check if it's time to check for updates (every 24 hours)
-                if let Some(last_check) = update_config.last_check {
+                let config_last_check = {
+                    let config = AppConfig::get();
+                    config.auto_update.last_check
+                };
+                // Check if it's time to check for updates (every 24 hours)
+                if let Some(last_check) = config_last_check {
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::SystemTime::UNIX_EPOCH)
                         .unwrap_or_default()
@@ -324,26 +315,25 @@ impl UpdateService {
                     Ok(update_info) => {
                         // Update last check time and save available update info
                         {
-                            let mut config_guard = config.lock().await;
-                            config_guard.auto_update.last_check = Some(
-                                std::time::SystemTime::now()
-                                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                                    .unwrap_or_default()
-                                    .as_secs(),
-                            );
-                            if update_info.update_available {
-                                // Save update info to config
-                                config_guard.auto_update.available_version =
-                                    Some(update_info.latest_version.clone());
-                                config_guard.auto_update.available_download_url =
-                                    update_info.download_url.clone();
-                            } else {
-                                // Clear update info if no updates
-                                config_guard.auto_update.available_version = None;
-                                config_guard.auto_update.available_download_url = None;
-                            }
-
-                            let _ = config_guard.save();
+                            AppConfig::update(|config| {
+                                config.auto_update.last_check = Some(
+                                    std::time::SystemTime::now()
+                                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                        .unwrap_or_default()
+                                        .as_secs(),
+                                );
+                                if update_info.update_available {
+                                    // Save update info to config
+                                    config.auto_update.available_version =
+                                        Some(update_info.latest_version.clone());
+                                    config.auto_update.available_download_url =
+                                        update_info.download_url.clone();
+                                } else {
+                                    // Clear update info if no updates
+                                    config.auto_update.available_version = None;
+                                    config.auto_update.available_download_url = None;
+                                }
+                            });
                         }
                         if update_info.update_available {
                             log::info!(
@@ -411,7 +401,7 @@ impl UpdateService {
 
 // Check if there's a saved update available in config
 pub fn get_saved_update_info() -> Option<UpdateInfo> {
-    let config = crate::state::config::AppConfig::load();
+    let config = AppConfig::get();
     if let Some(available_version) = &config.auto_update.available_version {
         let current_version = crate::utils::constants::APP_VERSION;
 
@@ -444,7 +434,11 @@ pub fn get_saved_update_info() -> Option<UpdateInfo> {
 pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
     log::debug!("🔄 Checking for updates on startup...");
 
-    let mut config = crate::state::config::AppConfig::load();
+    let last_check = {
+        let config = AppConfig::get();
+        config.auto_update.last_check
+    };
+
     let now = std::time::SystemTime::now()
         .duration_since(std::time::SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
@@ -454,7 +448,7 @@ pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
     // Only check if:
     // 1. Never checked before (last_check is None), OR
     // 2. Last check was more than 1 hour ago (to avoid spam on frequent restarts)
-    let should_check = match config.auto_update.last_check {
+    let should_check = match last_check {
         None => {
             log::info!("📅 First time checking for updates");
             true
@@ -500,23 +494,23 @@ pub async fn check_for_updates_on_startup() -> Result<UpdateInfo, UpdateError> {
     match check_for_updates_simple().await {
         Ok(update_info) => {
             // Update last check time and save info
-            config.auto_update.last_check = Some(now);
+            AppConfig::update(|config| {
+                config.auto_update.last_check = Some(now);
 
-            if update_info.update_available {
-                config.auto_update.available_version = Some(update_info.latest_version.clone());
-                config.auto_update.available_download_url = update_info.download_url.clone();
-                log::info!(
-                    "🆕 Startup check: Update available {} -> {}",
-                    update_info.current_version,
-                    update_info.latest_version
-                );
-            } else {
-                config.auto_update.available_version = None;
-                config.auto_update.available_download_url = None;
-                log::info!("✅ Startup check: No updates available");
-            }
-
-            let _ = config.save();
+                if update_info.update_available {
+                    config.auto_update.available_version = Some(update_info.latest_version.clone());
+                    config.auto_update.available_download_url = update_info.download_url.clone();
+                    log::info!(
+                        "🆕 Startup check: Update available {} -> {}",
+                        update_info.current_version,
+                        update_info.latest_version
+                    );
+                } else {
+                    config.auto_update.available_version = None;
+                    config.auto_update.available_download_url = None;
+                    log::info!("✅ Startup check: No updates available");
+                }
+            });
 
             // Update global state
             if update_info.update_available {

@@ -1,13 +1,18 @@
 use crate::{
-    components::ui::{ ImportStep, ProgressStep },
-    state::app::{ use_app_state, use_state_trigger },
-    utils::delay,
-    utils::soundpack_installer::{
-        check_soundpack_id_conflict,
-        extract_and_install_soundpack_with_type,
-        get_soundpack_id_from_zip,
+    components::ui::{ImportStep, ProgressStep},
+    libs::{
+        audio::load_soundpack_from_config,
+        soundpack::{
+            cache::SoundpackType,
+            installer::{
+                check_soundpack_id_conflict, extract_and_install_soundpack_with_type,
+                get_soundpack_id_from_zip,
+            },
+            validator::{validate_soundpack_structure, validate_zip_file},
+        },
     },
-    utils::soundpack_validator::{ validate_soundpack_structure, validate_zip_file },
+    state::app::{use_app_state, use_state_trigger},
+    utils::delay,
 };
 use dioxus::prelude::*;
 use lucide_dioxus::FolderArchive;
@@ -16,9 +21,9 @@ use std::sync::Arc;
 #[component]
 pub fn SoundpackImportModal(
     modal_id: String,
-    audio_ctx: Arc<crate::libs::audio::AudioContext>,
-    target_soundpack_type: Option<crate::state::soundpack::SoundpackType>,
-    on_import_success: EventHandler<()>
+    audio_ctx: Arc<crate::libs::audio::audio_context::AudioContext>,
+    target_soundpack_type: Option<SoundpackType>,
+    on_import_success: EventHandler<()>,
 ) -> Element {
     // Loading
     let is_loading = use_signal(|| false);
@@ -29,10 +34,12 @@ pub fn SoundpackImportModal(
     let error_message = use_signal(|| String::new());
     let success_step = use_signal(|| ImportStep::Idle);
     let success_message = use_signal(|| String::new());
+
     // Success messages for each step
     let file_selected_message = use_signal(|| String::new());
     let installation_success_message = use_signal(|| String::new());
     let finalization_success_message = use_signal(|| String::new());
+
     // Get app state outside the handler
     let app_state = use_app_state();
     let state_trigger = use_state_trigger();
@@ -110,11 +117,11 @@ pub fn SoundpackImportModal(
                 // Step 1: Open file dialog and select file
                 // ===========================================
                 // Open file dialog to select ZIP file
-                let file_dialog = rfd::AsyncFileDialog
-                    ::new()
+                let file_dialog = rfd::AsyncFileDialog::new()
                     .add_filter("ZIP Files", &["zip"])
                     .set_title("Select Sound Pack ZIP File")
-                    .pick_file().await;
+                    .pick_file()
+                    .await;
 
                 let file_handle = match file_dialog {
                     Some(handle) => handle,
@@ -195,9 +202,10 @@ pub fn SoundpackImportModal(
 
                 log::info!("⚒️ Installing soundpack ...");
 
-                let soundpack_info = match
-                    extract_and_install_soundpack_with_type(&file_path, target_soundpack_type)
-                {
+                let soundpack_info = match extract_and_install_soundpack_with_type(
+                    &file_path,
+                    target_soundpack_type,
+                ) {
                     Ok(info) => info,
                     Err(e) => {
                         error_step.set(ImportStep::Installing);
@@ -214,7 +222,7 @@ pub fn SoundpackImportModal(
                 delay::Delay::ms(500).await;
 
                 // Reload soundpacks in audio context
-                crate::state::app::reload_current_soundpacks(&audio_ctx);
+                let _ = load_soundpack_from_config(&audio_ctx, true);
 
                 // =============================================
                 // Step 6: Refreshing soundpack list
@@ -245,130 +253,128 @@ pub fn SoundpackImportModal(
 
     // Render the modal
     rsx! {
-      dialog { class: "modal", id: "{modal_id}",
-        div { class: "modal-box max-w-2xl",
-          form { method: "dialog",
-            button {
-              disabled: *is_loading.read(),
-              class: "btn btn-sm btn-circle btn-ghost absolute right-2 top-2",
-              "✕"
-            }
-          }
-          h3 { class: "font-bold text-lg mb-2", "Import sound pack" }
+        dialog { class: "modal", id: "{modal_id}",
+            div { class: "modal-box max-w-2xl",
+                form { method: "dialog",
+                    button {
+                        disabled: *is_loading.read(),
+                        class: "btn btn-sm btn-circle btn-ghost absolute right-2 top-2",
+                        "✕"
+                    }
+                }
+                h3 { class: "font-bold text-lg mb-2", "Import sound pack" }
 
-          if *current_step.read() == ImportStep::Idle {
-            div { class: "card border border-base-300 bg-base-200 text-sm p-4 space-y-4",
-              div {
-                "To import a sound pack, select a ZIP file containing the sound pack structure as shown below:"
-              }
-              div { class: "bg-base-100 p-2 px-3 rounded-box font-mono text-base-content/70 text-xs space-x-1",
-                div { "soundpack-name.zip" }
-                div { class: "", "├── config.json" }
-                div { class: "", "├── sound.ogg (for \"single\" def type)" }
-                div { class: "", "├── key_a.ogg (for \"multi\" def type)" }
-                div { class: "", "├── key_b.ogg (for \"multi\" def type)" }
-                div { class: "", "├── key_c.ogg (for \"multi\" def type)" }
-              }
-              div {
-                div { class: "text-sm", "Notes:" }
-                ul { class: "list list-disc text-xs ml-4 text-base-content/70 space-y-1",
-                  li {
-                    span { class: "kbd kbd-xs bg-base-100", "single" }
-                    " Use a single sound file to play for the entire sound pack."
-                  }
-                  li {
-                    span { class: "kbd kbd-xs bg-base-100", "multi" }
-                    " Use multiple sound files for different keys."
-                  }
-                  li { "The config.json file must be in the root of the ZIP file" }
-                }
-              }
-            }
-          } else {
+                if *current_step.read() == ImportStep::Idle {
+                    div { class: "card border border-base-300 bg-base-200 text-sm p-4 space-y-4",
+                        div {
+                            "To import a sound pack, select a ZIP file containing the sound pack structure as shown below:"
+                        }
+                        div { class: "bg-base-100 p-2 px-3 rounded-box font-mono text-base-content/70 text-xs space-x-1",
+                            div { "soundpack-name.zip" }
+                            div { class: "", "├── config.json" }
+                            div { class: "", "├── sound.ogg (for \"single\" def type)" }
+                            div { class: "", "├── key_a.ogg (for \"multi\" def type)" }
+                            div { class: "", "├── key_b.ogg (for \"multi\" def type)" }
+                            div { class: "", "├── key_c.ogg (for \"multi\" def type)" }
+                        }
+                        div {
+                            div { class: "text-sm", "Notes:" }
+                            ul { class: "list list-disc text-xs ml-4 text-base-content/70 space-y-1",
+                                li {
+                                    span { class: "kbd kbd-xs bg-base-100", "single" }
+                                    " Use a single sound file to play for the entire sound pack."
+                                }
+                                li {
+                                    span { class: "kbd kbd-xs bg-base-100", "multi" }
+                                    " Use multiple sound files for different keys."
+                                }
+                                li { "The config.json file must be in the root of the ZIP file" }
+                            }
+                        }
+                    }
+                } else {
 
-            div { class: "space-y-4",
-              // Progress Steps
-              div { class: "space-y-2",
-                ProgressStep {
-                  step_number: 1,
-                  title: "Select file (zip)".to_string(),
-                  current_step: *current_step.read(),
-                  error_message: if *error_step.read() == ImportStep::FileSelecting { error_message.read().clone() } else { String::new() },
-                  success_message: file_selected_message.read().clone(),
-                }
-                ProgressStep {
-                  step_number: 2,
-                  title: "Validating".to_string(),
-                  current_step: *current_step.read(),
-                  error_message: if *error_step.read() == ImportStep::Validating { error_message.read().clone() } else { String::new() },
-                  success_message: String::new(),
-                }
-                ProgressStep {
-                  step_number: 3,
-                  title: "Checking conflicts".to_string(),
-                  current_step: *current_step.read(),
-                  error_message: if *error_step.read() == ImportStep::CheckingConflicts { error_message.read().clone() } else { String::new() },
-                  success_message: String::new(),
-                }
-                ProgressStep {
-                  step_number: 4,
-                  title: "Installing sound pack".to_string(),
-                  current_step: *current_step.read(),
-                  error_message: if *error_step.read() == ImportStep::Installing { error_message.read().clone() } else { String::new() },
-                  success_message: installation_success_message.read().clone(),
-                }
-                ProgressStep {
-                  step_number: 5,
-                  title: "Finalizing".to_string(),
-                  current_step: *current_step.read(),
-                  error_message: if *error_step.read() == ImportStep::Finalizing { error_message.read().clone() } else { String::new() },
-                  success_message: finalization_success_message.read().clone(),
-                }
-                ProgressStep {
-                  step_number: 6,
-                  title: "Refreshing sound pack list".to_string(),
-                  current_step: *current_step.read(),
-                  error_message: if *error_step.read() == ImportStep::Refreshing { error_message.read().clone() } else { String::new() },
-                  success_message: String::new(),
-                }
-              }
+                    div { class: "space-y-4",
+                        // Progress Steps
+                        div { class: "space-y-2",
+                            ProgressStep {
+                                step_number: 1,
+                                title: "Select file (zip)".to_string(),
+                                current_step: *current_step.read(),
+                                error_message: if *error_step.read() == ImportStep::FileSelecting { error_message.read().clone() } else { String::new() },
+                                success_message: file_selected_message.read().clone(),
+                            }
+                            ProgressStep {
+                                step_number: 2,
+                                title: "Validating".to_string(),
+                                current_step: *current_step.read(),
+                                error_message: if *error_step.read() == ImportStep::Validating { error_message.read().clone() } else { String::new() },
+                                success_message: String::new(),
+                            }
+                            ProgressStep {
+                                step_number: 3,
+                                title: "Checking conflicts".to_string(),
+                                current_step: *current_step.read(),
+                                error_message: if *error_step.read() == ImportStep::CheckingConflicts { error_message.read().clone() } else { String::new() },
+                                success_message: String::new(),
+                            }
+                            ProgressStep {
+                                step_number: 4,
+                                title: "Installing sound pack".to_string(),
+                                current_step: *current_step.read(),
+                                error_message: if *error_step.read() == ImportStep::Installing { error_message.read().clone() } else { String::new() },
+                                success_message: installation_success_message.read().clone(),
+                            }
+                            ProgressStep {
+                                step_number: 5,
+                                title: "Finalizing".to_string(),
+                                current_step: *current_step.read(),
+                                error_message: if *error_step.read() == ImportStep::Finalizing { error_message.read().clone() } else { String::new() },
+                                success_message: finalization_success_message.read().clone(),
+                            }
+                            ProgressStep {
+                                step_number: 6,
+                                title: "Refreshing sound pack list".to_string(),
+                                current_step: *current_step.read(),
+                                error_message: if *error_step.read() == ImportStep::Refreshing { error_message.read().clone() } else { String::new() },
+                                success_message: String::new(),
+                            }
+                        }
 
-              // Success message display
-              if !success_message.read().is_empty() {
-                div { class: "alert alert-success alert-soft",
-                  "{success_message.read()}"
+                        // Success message display
+                        if !success_message.read().is_empty() {
+                            div { class: "alert alert-success alert-soft", "{success_message.read()}" }
+                        }
+                    }
                 }
-              }
-            }
-          }
 
-          // Modal Actions
-          div { class: "modal-action mt-6",
-            form { method: "dialog",
-              button {
-                class: "btn btn-sm btn-ghost",
-                disabled: *is_loading.read(),
-                onclick: handle_close,
-                "Close"
-              }
+                // Modal Actions
+                div { class: "modal-action mt-6",
+                    form { method: "dialog",
+                        button {
+                            class: "btn btn-sm btn-ghost",
+                            disabled: *is_loading.read(),
+                            onclick: handle_close,
+                            "Close"
+                        }
+                    }
+                    button {
+                        class: "btn btn-sm btn-neutral",
+                        disabled: *is_loading.read(),
+                        onclick: handle_import_click,
+                        if *is_loading.read() == false {
+                            FolderArchive { class: "w-4 h-4 mr-2" }
+                            "Select file"
+                        } else {
+                            span { class: "loading loading-spinner loading-sm mr-2" }
+                            "Importing..."
+                        }
+                    }
+                }
             }
-            button {
-              class: "btn btn-sm btn-neutral",
-              disabled: *is_loading.read(),
-              onclick: handle_import_click,
-              if *is_loading.read() == false {
-                FolderArchive { class: "w-4 h-4 mr-2" }
-                "Select file"
-              } else {
-                span { class: "loading loading-spinner loading-sm mr-2" }
-                "Importing..."
-              }
+            form { method: "dialog", class: "modal-backdrop",
+                button { disabled: *is_loading.read(), onclick: handle_close, "close" }
             }
-          }
         }
-        form { method: "dialog", class: "modal-backdrop",
-          button { disabled: *is_loading.read(), onclick: handle_close, "close" }
-        }
-      }
     }
 }

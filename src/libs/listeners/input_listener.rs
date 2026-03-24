@@ -5,6 +5,8 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use crate::libs::input_manager::InputEvent;
+
 // Maps a keyboard key to its standardized code
 fn map_key_to_code(key: Key) -> &'static str {
     match key {
@@ -132,7 +134,14 @@ fn map_key_to_code(key: Key) -> &'static str {
         Key::Function => "Fn", // Special function key on some keyboards
 
         // Unknown or unmapped keys
-        Key::Unknown(_) => "", // Handle unknown keys gracefully
+        Key::Unknown(id) => {
+            log::debug!(
+                "⚠️ Ignored unmapped key event (input listener): {:?}:{}",
+                key,
+                id
+            );
+            ""
+        }
     }
 }
 
@@ -162,10 +171,10 @@ fn map_button_to_code(button: Button) -> &'static str {
 /// When is_focused is provided, keyboard events are only sent when the window is UNFOCUSED
 /// to avoid duplicate events with the focused_input_listener
 pub fn start_unified_input_listener(
-    keyboard_tx: channel::Sender<String>,
-    mouse_tx: channel::Sender<String>,
+    keyboard_tx: channel::Sender<InputEvent>,
+    mouse_tx: channel::Sender<InputEvent>,
     hotkey_tx: channel::Sender<String>,
-    is_focused: Option<Arc<Mutex<bool>>>,
+    is_focused: Arc<Mutex<bool>>,
 ) {
     log::info!("🎮 Starting unified input listener (keyboard + mouse + hotkeys)...");
 
@@ -204,8 +213,8 @@ pub fn start_unified_input_listener(
                                         "🔥 Hotkey detected: Ctrl+Alt+M - Toggling global sound"
                                     );
                                     match hotkey_tx.send("TOGGLE_SOUND".to_string()) {
-                                        Ok(()) => log::debug!("[rdev] Hotkey event sent successfully"),
-                                        Err(e) => log::error!("[rdev] Failed to send hotkey event: {}", e),
+                                        Ok(()) => log::debug!("Hotkey event sent successfully"),
+                                        Err(e) => log::error!("Failed to send hotkey event: {}", e),
                                     }
                                     return; // Don't process this as a regular key event
                                 }
@@ -215,10 +224,9 @@ pub fn start_unified_input_listener(
 
                         // If focus state is provided, only send keyboard events when UNFOCUSED
                         // This prevents duplicate events with the focused_input_listener
-                        if let Some(ref focus_state) = is_focused {
-                            if *focus_state.lock().unwrap() {
-                                return; // Window is focused, skip keyboard event (focused_input_listener handles it)
-                            }
+                        if *is_focused.lock().unwrap() {
+                            // Window is focused, skip keyboard event (focused_input_listener handles it)
+                            return;
                         }
 
                         // Check if key is already pressed
@@ -239,13 +247,20 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            match keyboard_tx.send(key_code.to_string()) {
-                                Ok(()) => log::debug!("[rdev] Key press detected: {}", key_code),
-                                Err(e) => log::error!("[rdev] Failed to send key press '{}': {}", key_code, e),
+                            let event = InputEvent {
+                                code: key_code.to_string(),
+                                is_down: true,
+                                received_at: Instant::now(),
+                            };
+                            match keyboard_tx.send(event) {
+                                Ok(()) => log::debug!("Key press detected: {}", key_code),
+                                Err(e) => {
+                                    log::error!("Failed to send key press '{}': {}", key_code, e)
+                                }
                             }
                         }
                     } else {
-                        log::debug!("[rdev] Ignored unmapped key press: {:?}", key);
+                        log::debug!("Ignored unmapped key press: {:?}", key);
                     }
                 }
                 EventType::KeyRelease(key) => {
@@ -263,10 +278,8 @@ pub fn start_unified_input_listener(
                         }
 
                         // If focus state is provided, only send keyboard events when UNFOCUSED
-                        if let Some(ref focus_state) = is_focused {
-                            if *focus_state.lock().unwrap() {
-                                return; // Window is focused, skip keyboard event
-                            }
+                        if *is_focused.lock().unwrap() {
+                            return;
                         }
 
                         // Remove key from pressed set
@@ -274,12 +287,19 @@ pub fn start_unified_input_listener(
                         pressed.remove(&key_code.to_string());
                         drop(pressed);
 
-                        match keyboard_tx.send(format!("UP:{}", key_code)) {
-                            Ok(()) => log::debug!("[rdev] Key release detected: {}", key_code),
-                            Err(e) => log::error!("[rdev] Failed to send key release '{}': {}", key_code, e),
+                        let event = InputEvent {
+                            code: key_code.to_string(),
+                            is_down: false,
+                            received_at: Instant::now(),
+                        };
+                        match keyboard_tx.send(event) {
+                            Ok(()) => log::debug!("Key release detected: {}", key_code),
+                            Err(e) => {
+                                log::error!("Failed to send key release '{}': {}", key_code, e)
+                            }
                         }
                     } else {
-                        log::debug!("[rdev] Ignored unmapped key release: {:?}", key);
+                        log::debug!("Ignored unmapped key release: {:?}", key);
                     }
                 }
 
@@ -314,13 +334,22 @@ pub fn start_unified_input_listener(
 
                         if time_since_last > Duration::from_millis(1) {
                             *last = now;
-                            match mouse_tx.send(button_code.to_string()) {
-                                Ok(()) => log::debug!("[rdev] Mouse press detected: {}", button_code),
-                                Err(e) => log::error!("[rdev] Failed to send mouse press '{}': {}", button_code, e),
+                            let event = InputEvent {
+                                code: button_code.to_string(),
+                                is_down: true,
+                                received_at: Instant::now(),
+                            };
+                            match mouse_tx.send(event) {
+                                Ok(()) => log::debug!("Mouse press detected: {}", button_code),
+                                Err(e) => log::error!(
+                                    "Failed to send mouse press '{}': {}",
+                                    button_code,
+                                    e
+                                ),
                             }
                         }
                     } else {
-                        log::debug!("[rdev] Ignored unmapped/unknown mouse button: {:?}", button);
+                        log::debug!("Ignored unmapped/unknown mouse button: {:?}", button);
                     }
                 }
                 EventType::ButtonRelease(button) => {
@@ -333,12 +362,22 @@ pub fn start_unified_input_listener(
                         pressed.remove(&button_code.to_string());
                         drop(pressed);
 
-                        match mouse_tx.send(format!("UP:{}", button_code)) {
-                            Ok(()) => log::debug!("[rdev] Mouse release detected: {}", button_code),
-                            Err(e) => log::error!("[rdev] Failed to send mouse release '{}': {}", button_code, e),
+                        let event = InputEvent {
+                            code: button_code.to_string(),
+                            is_down: false,
+                            received_at: Instant::now(),
+                        };
+                        match mouse_tx.send(event) {
+                            Ok(()) => log::debug!("Mouse release detected: {}", button_code),
+                            Err(e) => {
+                                log::error!("Failed to send mouse release '{}': {}", button_code, e)
+                            }
                         }
                     } else {
-                        log::debug!("[rdev] Ignored unmapped/unknown mouse button release: {:?}", button);
+                        log::debug!(
+                            "Ignored unmapped/unknown mouse button release: {:?}",
+                            button
+                        );
                     }
                 }
                 // Skip mouse wheel events for now

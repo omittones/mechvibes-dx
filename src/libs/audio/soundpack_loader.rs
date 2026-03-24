@@ -1,72 +1,128 @@
-use std::path::PathBuf;
-
+use crate::libs::audio::audio_context::AudioContext;
+use crate::libs::soundpack::cache::{
+    SoundpackRef, SoundpackType, load_cache, metadata_from_soundpack, save_cache,
+};
+use crate::libs::soundpack::format::{SoundPack, load_and_migrate_soundpack};
 use crate::state::config::AppConfig;
-use crate::state::paths;
-use crate::state::soundpack::{SoundPack, SoundpackType};
-use crate::state::soundpack::{SoundpackCache, SoundpackMetadata};
 
-use super::audio_context::AudioContext;
-
-pub fn load_soundpack(context: &AudioContext) -> Result<(), String> {
-    let config = AppConfig::load();
-    // Load both keyboard and mouse soundpacks if they are selected
-    if !config.keyboard_soundpack.is_empty() {
-        load_keyboard_soundpack(context, &config.keyboard_soundpack)?;
-    }
-    if !config.mouse_soundpack.is_empty() {
-        load_mouse_soundpack(context, &config.mouse_soundpack)?;
-    }
-    Ok(())
-}
-
-pub fn load_keyboard_soundpack(context: &AudioContext, soundpack_id: &str) -> Result<(), String> {
-    load_keyboard_soundpack_with_cache_control(context, soundpack_id, true)
-}
-
-pub fn load_keyboard_soundpack_with_cache_control(
-    context: &AudioContext,
-    soundpack_id: &str,
-    update_cache_on_error: bool,
+/// Reload the current soundpacks from configuration.
+/// If a soundpack fails to load, clear its selection and optionally save config.
+/// Returns Ok(()) if succeeded, Err if any selected soundpack fails to load (after clear/reset).
+pub fn load_soundpack_from_config(
+    audio_ctx: &AudioContext,
+    update_config: bool,
 ) -> Result<(), String> {
-    if soundpack_id.is_empty() {
-        return Err("Soundpack id is empty!".into());
-    }
+    let mut last_err: Option<String> = None;
 
-    log::info!("🎹 Loading keyboard soundpack: {}", soundpack_id);
-    match load_keyboard_soundpack_optimized(context, soundpack_id, update_cache_on_error) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            // Capture the error in cache
-            capture_soundpack_loading_error(soundpack_id, SoundpackType::Keyboard, &e);
-            Err(e)
-        }
-    }
-}
-
-pub fn load_mouse_soundpack(context: &AudioContext, soundpack_id: &str) -> Result<(), String> {
-    load_mouse_soundpack_with_cache_control(context, soundpack_id, true)
-}
-
-pub fn load_mouse_soundpack_with_cache_control(
-    context: &AudioContext,
-    soundpack_id: &str,
-    update_cache_on_error: bool,
-) -> Result<(), String> {
-    if soundpack_id.is_empty() {
-        return Err("Soundpack id is empty!".into());
-    }
-
-    log::info!("🖱️ Loading mouse soundpack: {}", soundpack_id);
-    match load_mouse_soundpack_optimized(context, soundpack_id, update_cache_on_error) {
-        Ok(()) => Ok(()),
-        Err(e) => {
-            // Capture the error in cache only if requested
-            if update_cache_on_error {
-                capture_soundpack_loading_error(soundpack_id, SoundpackType::Mouse, &e);
+    let config = AppConfig::get();
+    // Load keyboard soundpack
+    let clear_keyboard_soundpack = if !config.keyboard_soundpack.is_empty() {
+        match SoundpackRef::parse(&config.keyboard_soundpack)
+            .map(|id| load_soundpack_file(audio_ctx, &id))
+        {
+            Ok(_) => {
+                log::debug!(
+                    "✅ Keyboard soundpack '{}' reloaded successfully",
+                    config.keyboard_soundpack
+                );
+                false
             }
-            Err(e)
+            Err(e) => {
+                log::error!(
+                    "❌ Failed to reload keyboard soundpack '{}'. Clearing selection.",
+                    config.keyboard_soundpack
+                );
+                last_err = Some(e.to_string());
+                true
+            }
+        }
+    } else {
+        true
+    };
+
+    // Load mouse soundpack
+    let clear_mouse_soundpack = if !config.mouse_soundpack.is_empty() {
+        match SoundpackRef::parse(&config.mouse_soundpack)
+            .map(|id| load_soundpack_file(audio_ctx, &id).ok())
+        {
+            Ok(_) => {
+                log::debug!(
+                    "✅ Mouse soundpack '{}' reloaded successfully",
+                    config.mouse_soundpack
+                );
+                false
+            }
+            Err(e) => {
+                log::error!(
+                    "❌ Failed to reload mouse soundpack '{}'. Clearing selection.",
+                    config.mouse_soundpack
+                );
+                last_err = Some(e.to_string());
+                true
+            }
+        }
+    } else {
+        true
+    };
+
+    // Drop config to avoid holding the lock for too long
+    drop(config);
+
+    // Save config if any changes were made and requested by caller
+    if update_config && (clear_keyboard_soundpack || clear_mouse_soundpack) {
+        AppConfig::update(|config| {
+            if clear_keyboard_soundpack {
+                config.keyboard_soundpack = "".to_string()
+            };
+            if clear_mouse_soundpack {
+                config.mouse_soundpack = "".to_string()
+            }
+        });
+        log::debug!("💾 Config updated due to failed soundpack loads");
+    }
+
+    // If there was any error, return error, otherwise Ok
+    if let Some(err) = last_err {
+        Err(err)
+    } else {
+        Ok(())
+    }
+}
+
+pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<(), String> {
+    log::info!("📂 Direct loading soundpack: {}", id);
+
+    // Load soundpack directly from filesystem
+    let soundpack_dir = id.to_soundpack_path().to_string_lossy().to_string();
+
+    let soundpack = load_and_migrate_soundpack(&soundpack_dir)?;
+
+    // Load audio samples directly from file
+    let samples = load_audio_file(&soundpack_dir, &soundpack)?;
+
+    match id.soundpack_type {
+        SoundpackType::Mouse => {
+            let mouse_mappings = create_mouse_mappings(&soundpack, &samples.0); // Update audio context with mouse data
+            context.update_mouse_context(samples, mouse_mappings)?;
+        }
+        SoundpackType::Keyboard => {
+            let key_mappings = create_key_mappings(&soundpack, &samples.0); // Update audio context with keyboard data
+            context.update_keyboard_context(samples, key_mappings)?;
         }
     }
+
+    // Update metadata cache - create metadata with no error since loading succeeded
+    let mut cache = load_cache();
+    let metadata = metadata_from_soundpack(id.clone(), &soundpack);
+    cache.add_soundpack(metadata);
+    save_cache(&cache);
+
+    log::info!(
+        "✅ Successfully loaded mouse soundpack: {} (direct from files)",
+        soundpack.name
+    );
+
+    Ok(())
 }
 
 fn load_audio_file(
@@ -390,388 +446,21 @@ fn load_audio_with_symphonia(file_path: &str) -> Result<(Vec<f32>, u16, u32), St
     Ok((samples, channels, sample_rate))
 }
 
-/// Direct keyboard soundpack loading
-pub fn load_keyboard_soundpack_optimized(
-    context: &AudioContext,
-    soundpack_id: &str,
-    update_cache_on_error: bool,
-) -> Result<(), String> {
-    log::info!("📂 Direct loading keyboard soundpack: {}", soundpack_id);
-
-    // Load soundpack directly from filesystem
-    let soundpack_dir = paths::soundpacks::find_soundpack_dir(soundpack_id, false);
-    let config_path = PathBuf::from(&soundpack_dir).join("config.json");
-
-    let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config at {}: {}", config_path.display(), e))?; // Only load V2 config format - V1 configs must be converted first
-    let mut soundpack: SoundPack = serde_json::from_str(&config_content).map_err(|e| {
-        // Check if this might be a V1 config
-        if config_content.contains("\"key_define_type\"") || config_content.contains("\"defines\"") {
-            format!("This appears to be a V1 soundpack config. Please convert it to V2 format first using the refresh/convert function. Parse error: {}", e)
-        } else {
-            format!("Failed to parse V2 soundpack config: {}", e)
-        }
-    })?;
-
-    soundpack.soundpack_type = SoundpackType::Keyboard;
-
-    // Load audio samples directly from file
-    let samples = load_audio_file(&soundpack_dir, &soundpack)?;
-
-    // Create key mappings (only for keyboard soundpacks)
-    let key_mappings = create_key_mappings(&soundpack, &samples.0); // Update audio context with keyboard data
-    update_keyboard_context(context, samples, key_mappings, &soundpack)?;
-
-    // Update metadata cache - create metadata with no error since loading succeeded
-    let mut cache = SoundpackCache::load();
-    match create_soundpack_metadata(&soundpack_dir, &soundpack) {
-        Ok(metadata) => {
-            cache.add_soundpack(metadata);
-        }
-        Err(e) => {
-            log::error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
-
-            // Only add error metadata to cache if requested (not during startup)
-            if update_cache_on_error {
-                // Create minimal metadata with error information
-                let error_metadata = SoundpackMetadata {
-                    id: soundpack.id.clone(), // Use original ID from config
-                    name: soundpack.name.clone(),
-                    author: soundpack.author.clone(),
-                    description: soundpack.description.clone(),
-                    version: soundpack
-                        .version
-                        .clone()
-                        .unwrap_or_else(|| "1.0".to_string()),
-                    tags: soundpack.tags.clone().unwrap_or_default(),
-                    icon: soundpack.icon.clone(),
-                    soundpack_type: soundpack.soundpack_type,
-                    folder_path: soundpack_id.to_string(), // Add folder_path for correct path resolution
-                    last_modified: 0,
-                    last_accessed: std::time::SystemTime::now()
-                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    config_version: soundpack
-                        .config_version
-                        .as_ref()
-                        .and_then(|v| v.parse::<u32>().ok()),
-                    is_valid_v2: true,
-                    validation_status: "loaded_with_metadata_error".to_string(),
-                    can_be_converted: false,
-                    last_error: Some(format!("Metadata creation failed: {}", e)),
-                };
-                cache.add_soundpack(error_metadata);
-            }
-        }
-    }
-    cache.save();
-
-    log::info!(
-        "✅ Successfully loaded keyboard soundpack: {} (direct from files)",
-        soundpack.name
-    );
-    Ok(())
-}
-
-/// Direct mouse soundpack loading
-pub fn load_mouse_soundpack_optimized(
-    context: &AudioContext,
-    soundpack_id: &str,
-    update_cache_on_error: bool,
-) -> Result<(), String> {
-    log::info!("📂 Direct loading mouse soundpack: {}", soundpack_id);
-
-    // Load soundpack directly from filesystem
-    let soundpack_dir = paths::soundpacks::find_soundpack_dir(soundpack_id, true);
-    let config_path = PathBuf::from(&soundpack_dir).join("config.json");
-
-    // Load config.json
-    let config_content = std::fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config: {}", e))?;
-    let mut soundpack: SoundPack = serde_json::from_str(&config_content)
-        .map_err(|e| format!("Failed to parse config: {}", e))?;
-
-    soundpack.soundpack_type = SoundpackType::Mouse;
-
-    // Load audio samples directly from file
-    let samples = load_audio_file(&soundpack_dir, &soundpack)?;
-
-    // Create mouse mappings (only for mouse soundpacks)
-    let mouse_mappings = create_mouse_mappings(&soundpack, &samples.0); // Update audio context with mouse data
-    update_mouse_context(context, samples, mouse_mappings, &soundpack)?;
-
-    // Update metadata cache - create metadata with no error since loading succeeded
-    let mut cache = SoundpackCache::load();
-    match create_soundpack_metadata(&soundpack_dir, &soundpack) {
-        Ok(metadata) => {
-            cache.add_soundpack(metadata);
-        }
-        Err(e) => {
-            log::error!("⚠️Failed to create metadata for {}: {}", soundpack_id, e);
-
-            // Only add error metadata to cache if requested (not during startup)
-            if update_cache_on_error {
-                // Create minimal metadata with error information
-                let error_metadata = SoundpackMetadata {
-                    id: soundpack.id.clone(), // Use original ID from config
-                    name: soundpack.name.clone(),
-                    author: soundpack.author.clone(),
-                    description: soundpack.description.clone(),
-                    version: soundpack
-                        .version
-                        .clone()
-                        .unwrap_or_else(|| "1.0".to_string()),
-                    tags: soundpack.tags.clone().unwrap_or_default(),
-                    icon: soundpack.icon.clone(),
-                    soundpack_type: soundpack.soundpack_type,
-                    folder_path: soundpack_id.to_string(), // Add folder_path for correct path resolution
-                    last_modified: 0,
-                    last_accessed: std::time::SystemTime::now()
-                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_secs(),
-                    config_version: soundpack
-                        .config_version
-                        .as_ref()
-                        .and_then(|v| v.parse::<u32>().ok()),
-                    is_valid_v2: true,
-                    validation_status: "loaded_with_metadata_error".to_string(),
-                    can_be_converted: false,
-                    last_error: Some(format!("Metadata creation failed: {}", e)),
-                };
-                cache.add_soundpack(error_metadata);
-            }
-        }
-    }
-    cache.save();
-
-    log::info!(
-        "✅ Successfully loaded mouse soundpack: {} (direct from files)",
-        soundpack.name
-    );
-    Ok(())
-}
-
-fn update_keyboard_context(
-    context: &AudioContext,
-    samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
-    key_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
-    soundpack: &SoundPack,
-) -> Result<(), String> {
-    let (audio_samples, channels, sample_rate) = samples;
-    let sample_count = audio_samples.len();
-    let key_mapping_count = key_mappings.len();
-    let soundpack_name = soundpack.name.clone();
-
-    // Update keyboard samples
-    if let Ok(mut cached) = context.keyboard_samples.lock() {
-        *cached = Some((audio_samples, channels, sample_rate));
-        log::info!("🎹 Updated keyboard samples: {} samples", sample_count);
-    } else {
-        return Err("Failed to acquire lock on keyboard_samples".to_string());
-    }
-
-    // Update key mappings
-    if let Ok(mut key_map) = context.key_map.lock() {
-        let old_count = key_map.len();
-        key_map.clear();
-
-        for (key, mappings) in key_mappings {
-            let converted_mappings: Vec<[f32; 2]> = mappings
-                .into_iter()
-                .map(|(start, end)| [start as f32, end as f32])
-                .collect();
-            key_map.insert(key.clone(), converted_mappings);
-        }
-
-        log::info!(
-            "🗝️ Updated key mappings: {} -> {} keys",
-            old_count,
-            key_map.len()
-        );
-    } else {
-        return Err("Failed to acquire lock on key_map".to_string());
-    }
-
-    // Clear active keyboard audio state
-    if let Ok(mut sinks) = context.key_sinks.lock() {
-        let old_sinks = sinks.len();
-        sinks.clear();
-        if old_sinks > 0 {
-            log::info!("🔇 Cleared {} active key sinks", old_sinks);
-        }
-    }
-
-    if let Ok(mut pressed) = context.key_pressed.lock() {
-        let old_pressed = pressed.len();
-        pressed.clear();
-        if old_pressed > 0 {
-            log::info!("⌨️ Cleared {} pressed keys", old_pressed);
-        }
-    }
-
-    log::info!(
-        "✅ Successfully loaded keyboard soundpack: {} ({} key mappings) - Memory properly cleaned",
-        soundpack_name,
-        key_mapping_count
-    );
-    Ok(())
-}
-
-fn update_mouse_context(
-    context: &AudioContext,
-    samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
-    mouse_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
-    soundpack: &SoundPack,
-) -> Result<(), String> {
-    let (audio_samples, channels, sample_rate) = samples;
-    let sample_count = audio_samples.len();
-    let mouse_mapping_count = mouse_mappings.len();
-    let soundpack_name = soundpack.name.clone();
-
-    // Update mouse samples
-    if let Ok(mut cached) = context.mouse_samples.lock() {
-        *cached = Some((audio_samples, channels, sample_rate));
-        log::info!("🖱️ Updated mouse samples: {} samples", sample_count);
-    } else {
-        return Err("Failed to acquire lock on mouse_samples".to_string());
-    }
-
-    // Update mouse mappings
-    if let Ok(mut mouse_map) = context.mouse_map.lock() {
-        let old_count = mouse_map.len();
-        mouse_map.clear();
-
-        for (button, mappings) in mouse_mappings {
-            let converted_mappings: Vec<[f32; 2]> = mappings
-                .into_iter()
-                .map(|(start, end)| [start as f32, end as f32])
-                .collect();
-            mouse_map.insert(button.clone(), converted_mappings);
-        }
-
-        log::info!(
-            "🖱️ Updated mouse mappings: {} -> {} buttons",
-            old_count,
-            mouse_map.len()
-        );
-    } else {
-        return Err("Failed to acquire lock on mouse_map".to_string());
-    }
-
-    // Clear active mouse audio state
-    if let Ok(mut mouse_sinks) = context.mouse_sinks.lock() {
-        let old_sinks = mouse_sinks.len();
-        mouse_sinks.clear();
-        if old_sinks > 0 {
-            log::info!("🔇 Cleared {} active mouse sinks", old_sinks);
-        }
-    }
-
-    if let Ok(mut mouse_pressed) = context.mouse_pressed.lock() {
-        let old_pressed = mouse_pressed.len();
-        mouse_pressed.clear();
-        if old_pressed > 0 {
-            log::info!("🖱️ Cleared {} pressed mouse buttons", old_pressed);
-        }
-    }
-
-    log::info!(
-        "✅ Successfully loaded mouse soundpack: {} ({} mouse mappings) - Memory properly cleaned",
-        soundpack_name,
-        mouse_mapping_count
-    );
-    Ok(())
-}
-
-fn create_soundpack_metadata(
-    soundpack_path: &str,
-    soundpack: &SoundPack,
-) -> Result<SoundpackMetadata, String> {
-    // Extract the soundpack ID from the full path
-    // e.g., "/path/to/soundpacks/keyboard/Apex by teia" -> "keyboard/Apex by teia"
-    let soundpacks_dir = crate::utils::path::get_soundpacks_dir_absolute();
-    let id = if let Ok(relative_path) =
-        std::path::Path::new(soundpack_path).strip_prefix(&soundpacks_dir)
-    {
-        relative_path.to_string_lossy().replace('\\', "/")
-    } else {
-        // Fallback to just the folder name if we can't get relative path
-        std::path::Path::new(soundpack_path)
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("unknown")
-            .to_string()
-    };
-
-    // Get file metadata
-    let last_modified = match std::fs::metadata(soundpack_path) {
-        Ok(metadata) => metadata
-            .modified()
-            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(),
-        Err(_) => 0,
-    };
-
-    Ok(SoundpackMetadata {
-        id: id.clone(), // Use calculated relative path ID instead of config ID
-        name: soundpack.name.clone(),
-        author: soundpack.author.clone(),
-        description: soundpack.description.clone(),
-        version: soundpack
-            .version
-            .clone()
-            .unwrap_or_else(|| "1.0".to_string()),
-        tags: soundpack.tags.clone().unwrap_or_default(),
-        icon: {
-            // Generate dynamic URL for icon instead of base64 conversion
-            if let Some(icon_filename) = &soundpack.icon {
-                let icon_path = format!("{}/{}", soundpack_path, icon_filename);
-                if std::path::Path::new(&icon_path).exists() {
-                    // Create dynamic URL that will be served by the asset handler
-                    Some(format!("/soundpack-images/{}/{}", id, icon_filename))
-                } else {
-                    Some(String::new()) // Empty string if icon file not found
-                }
-            } else {
-                Some(String::new()) // Empty string if no icon specified
-            }
-        },
-        soundpack_type: soundpack.soundpack_type, // Include the mouse field
-        folder_path: id,                          // Use the derived folder path for loading
-        last_modified,
-        last_accessed: std::time::SystemTime::now()
-            .duration_since(std::time::SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs(), // Add validation fields with default values
-        config_version: Some(soundpack.config_version_num),
-        is_valid_v2: true, // Assume valid since it loaded successfully
-        validation_status: "valid".to_string(),
-        can_be_converted: false,
-        // Error tracking - None since we successfully created metadata
-        last_error: None,
-    })
-}
-
 fn create_key_mappings(
     soundpack: &SoundPack,
     _samples: &[f32],
 ) -> std::collections::HashMap<String, Vec<(f64, f64)>> {
-    let mut key_mappings = std::collections::HashMap::new(); // For keyboard soundpacks, use the definitions field for keyboard mappings
-    // For mouse soundpacks, return empty key mappings
-    if soundpack.soundpack_type == crate::state::soundpack::SoundpackType::Keyboard {
-        for (key, key_def) in &soundpack.definitions {
-            // Convert KeyDefinition timing to Vec<(f64, f64)>
-            let converted_mappings: Vec<(f64, f64)> = key_def
-                .timing
-                .iter()
-                .map(|pair| (pair[0] as f64, pair[1] as f64))
-                .collect();
-            key_mappings.insert(key.clone(), converted_mappings);
-        }
+    // For keyboard soundpacks, use the definitions field for keyboard mappings
+    let mut key_mappings = std::collections::HashMap::new();
+
+    for (key, key_def) in &soundpack.definitions {
+        // Convert KeyDefinition timing to Vec<(f64, f64)>
+        let converted_mappings: Vec<(f64, f64)> = key_def
+            .timing
+            .iter()
+            .map(|pair| (pair[0] as f64, pair[1] as f64))
+            .collect();
+        key_mappings.insert(key.clone(), converted_mappings);
     }
 
     key_mappings
@@ -781,101 +470,38 @@ fn create_mouse_mappings(
     soundpack: &SoundPack,
     _samples: &[f32],
 ) -> std::collections::HashMap<String, Vec<(f64, f64)>> {
-    let mut mouse_mappings = std::collections::HashMap::new(); // For mouse soundpacks, use the definitions field directly
-    if soundpack.soundpack_type == crate::state::soundpack::SoundpackType::Mouse {
-        // This is a mouse soundpack, use definitions field for mouse mappings
-        for (button, key_def) in &soundpack.definitions {
-            // Convert KeyDefinition timing to Vec<(f64, f64)>
-            let converted_mappings: Vec<(f64, f64)> = key_def
-                .timing
-                .iter()
-                .map(|pair| (pair[0] as f64, pair[1] as f64))
-                .collect();
-            mouse_mappings.insert(button.clone(), converted_mappings);
-        }
-    } else {
-        // This is a keyboard soundpack, create default mouse mappings from keyboard sounds
-        log::info!(
-            "🖱️ No mouse definitions found, creating default mouse mappings from keyboard sounds"
-        );
+    let mut mouse_mappings = std::collections::HashMap::new();
 
-        // Use common keyboard keys as fallback for mouse buttons
-        let fallback_mappings = [
-            ("MouseLeft", "Space"),
-            ("MouseRight", "Enter"),
-            ("MouseMiddle", "Tab"),
-            ("MouseWheelUp", "ArrowUp"),
-            ("MouseWheelDown", "ArrowDown"),
-            ("Mouse4", "Backspace"),
-            ("Mouse5", "Delete"),
-            ("Mouse6", "Home"),
-            ("Mouse7", "End"),
-            ("Mouse8", "PageUp"),
-        ];
-        for (mouse_button, keyboard_key) in &fallback_mappings {
-            if let Some(key_def) = soundpack.definitions.get(*keyboard_key) {
-                let converted_mappings: Vec<(f64, f64)> = key_def
-                    .timing
-                    .iter()
-                    .map(|pair| (pair[0] as f64, pair[1] as f64))
-                    .collect();
-                mouse_mappings.insert(mouse_button.to_string(), converted_mappings);
-            }
-        }
+    // Add fallback: if any defined mouse button is missing, copy from the paired keyboard key
+    let mouse_buttons_with_fallback = [
+        ("MouseLeft", "Space"),
+        ("MouseRight", "Enter"),
+        ("MouseMiddle", "Tab"),
+        ("MouseWheelUp", "ArrowUp"),
+        ("MouseWheelDown", "ArrowDown"),
+        ("Mouse4", "Backspace"),
+        ("Mouse5", "Delete"),
+        ("Mouse6", "Home"),
+        ("Mouse7", "End"),
+        ("Mouse8", "PageUp"),
+    ];
+
+    for (button, fallback) in mouse_buttons_with_fallback {
+        let key_def = if let Some(key_def) = soundpack.definitions.get(button) {
+            key_def
+        } else if let Some(key_def) = soundpack.definitions.get(fallback) {
+            key_def
+        } else {
+            continue;
+        };
+
+        let converted_mappings: Vec<(f64, f64)> = key_def
+            .timing
+            .iter()
+            .map(|pair| (pair[0] as f64, pair[1] as f64))
+            .collect();
+        mouse_mappings.insert(button.to_string(), converted_mappings);
     }
 
     mouse_mappings
-}
-
-/// Capture soundpack loading error and update the cache
-fn capture_soundpack_loading_error(soundpack_id: &str, soundpack_type: SoundpackType, error: &str) {
-    // Skip creating cache entries for empty soundpack IDs
-    if soundpack_id.is_empty() {
-        log::error!("⚠️Skipping cache entry for empty soundpack ID: {}", error);
-        return;
-    }
-
-    log::info!("📝 Capturing loading error for {}: {}", soundpack_id, error);
-
-    let mut cache = SoundpackCache::load();
-
-    // Check if we already have metadata for this soundpack
-    if let Some(existing_metadata) = cache.soundpacks.get_mut(soundpack_id) {
-        // Update existing metadata with error
-        existing_metadata.last_error = Some(error.to_string());
-        existing_metadata.validation_status = "loading_error".to_string();
-    } else {
-        // Create minimal metadata entry with error information
-        let error_metadata = SoundpackMetadata {
-            id: soundpack_id.to_string(),
-            name: format!("Error: {}", soundpack_id),
-            author: None,
-            description: Some(format!("Loading failed: {}", error)),
-            version: "unknown".to_string(),
-            tags: vec!["error".to_string()],
-            icon: None,
-            soundpack_type: soundpack_type,
-            folder_path: soundpack_id.to_string(), // Add folder_path for error entries
-            last_modified: 0,
-            last_accessed: std::time::SystemTime::now()
-                .duration_since(std::time::SystemTime::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs(),
-            config_version: None,
-            is_valid_v2: false,
-            validation_status: "loading_error".to_string(),
-            can_be_converted: false,
-            last_error: Some(error.to_string()),
-        };
-
-        cache
-            .soundpacks
-            .insert(soundpack_id.to_string(), error_metadata);
-    }
-
-    cache.save();
-    log::info!(
-        "💾 Updated cache with error information for {}",
-        soundpack_id
-    );
 }
