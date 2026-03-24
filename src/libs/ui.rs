@@ -67,12 +67,6 @@ pub fn app() -> Element {
         });
     });
 
-    let input_channels = get_input_channels();
-
-    let keyboard_rx = &input_channels.keyboard_rx;
-    let mouse_rx = &input_channels.mouse_rx;
-    let hotkey_rx = &input_channels.hotkey_rx;
-
     // ===== WINDOW FOCUS TRACKING =====
     // Track window focus state to switch between rdev (unfocused) and device_query (focused)
     // This is a hybrid approach to work around the rdev + Wry/Winit incompatibility on Windows
@@ -93,6 +87,12 @@ pub fn app() -> Element {
             }
         });
     }
+
+    let input_channels = get_input_channels();
+
+    let keyboard_rx = &input_channels.keyboard_rx;
+    let mouse_rx = &input_channels.mouse_rx;
+    let hotkey_rx = &input_channels.hotkey_rx;
 
     // Process keyboard events and update both audio and UI state
     {
