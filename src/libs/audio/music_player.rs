@@ -244,13 +244,13 @@ impl RodioMusicPlayer {
             .map_err(|e| format!("Failed to send pause command: {}", e))
     }
 
-    pub fn resume(&self) -> Result<(), String> {
+    fn resume(&self) -> Result<(), String> {
         self.command_sender
             .send(MusicCommand::Resume)
             .map_err(|e| format!("Failed to send resume command: {}", e))
     }
 
-    pub fn stop(&self) -> Result<(), String> {
+    fn stop(&self) -> Result<(), String> {
         self.command_sender
             .send(MusicCommand::Stop)
             .map_err(|e| format!("Failed to send stop command: {}", e))
@@ -268,12 +268,12 @@ impl RodioMusicPlayer {
             .map_err(|e| format!("Failed to send mute command: {}", e))
     }
 
-    pub fn get_status(&self) -> MusicStatus {
+    fn get_status(&self) -> MusicStatus {
         let status_lock = self.status.lock().unwrap();
         status_lock.clone()
     }
 
-    pub fn is_finished(&self) -> bool {
+    fn is_finished(&self) -> bool {
         let sink_lock = self.sink.lock().unwrap();
         if let Some(ref sink) = *sink_lock {
             sink.empty()

@@ -1,4 +1,5 @@
 pub mod audio_context;
+mod sound_channel;
 pub mod music_player;
 pub mod sound_manager;
 pub mod sound_processor;

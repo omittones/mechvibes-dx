@@ -103,11 +103,11 @@ pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<
     match id.soundpack_type {
         SoundpackType::Mouse => {
             let mouse_mappings = create_mouse_mappings(&soundpack, &samples.0); // Update audio context with mouse data
-            context.update_mouse_context(samples, mouse_mappings)?;
+            context.load_mouse_mappings(samples, mouse_mappings)?;
         }
         SoundpackType::Keyboard => {
             let key_mappings = create_key_mappings(&soundpack, &samples.0); // Update audio context with keyboard data
-            context.update_keyboard_context(samples, key_mappings)?;
+            context.load_keyboard_mappings(samples, key_mappings)?;
         }
     }
 

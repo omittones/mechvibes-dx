@@ -30,7 +30,7 @@ pub fn HomePage(audio_ctx: Arc<AudioContext>) -> Element {
     // Update audio system volume when the volume control changes (enable_sound is handled by sound_manager)
     let ctx = audio_ctx.clone();
     use_effect(move || {
-        ctx.set_volume(volume());
+        ctx.set_keyboard_volume(volume());
     });
 
     // Update audio system mouse volume when the mouse volume control changes

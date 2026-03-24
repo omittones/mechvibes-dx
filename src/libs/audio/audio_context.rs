@@ -1,23 +1,16 @@
+use crate::libs::audio::sound_channel::PackKind;
 use crate::libs::device_manager::DeviceManager;
 use crate::state::config::AppConfig;
-use rodio::{OutputStream, OutputStreamHandle, Sink};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use rodio::OutputStream;
+use std::sync::Arc;
+
+use super::sound_channel::SoundChannel;
 
 #[derive(Clone)]
 pub struct AudioContext {
     _stream: Arc<OutputStream>,
-    pub(crate) stream_handle: OutputStreamHandle,
-    pub(crate) keyboard_samples: Arc<Mutex<Option<(Vec<f32>, u16, u32)>>>,
-    pub(crate) mouse_samples: Arc<Mutex<Option<(Vec<f32>, u16, u32)>>>,
-    pub(crate) key_map: Arc<Mutex<HashMap<String, Vec<[f32; 2]>>>>,
-    pub(crate) mouse_map: Arc<Mutex<HashMap<String, Vec<[f32; 2]>>>>,
-    pub(crate) max_voices: usize,
-    pub(crate) key_pressed: Arc<Mutex<HashMap<String, bool>>>,
-    pub(crate) mouse_pressed: Arc<Mutex<HashMap<String, bool>>>,
-    pub(crate) key_sinks: Arc<Mutex<HashMap<String, Sink>>>,
-    pub(crate) mouse_sinks: Arc<Mutex<HashMap<String, Sink>>>,
+    pub(crate) keyboard: SoundChannel,
+    pub(crate) mouse: SoundChannel,
     pub(crate) device_manager: DeviceManager,
 }
 
@@ -51,7 +44,7 @@ impl AudioContext {
                             device_id,
                             e
                         );
-                        log::error!("🔄 Falling back to default device...");
+                        log::info!("🔄 Falling back to default device...");
                         OutputStream::try_default()
                             .expect("Failed to create default audio output stream")
                     }
@@ -77,16 +70,8 @@ impl AudioContext {
 
         let context = Self {
             _stream: Arc::new(stream),
-            stream_handle,
-            keyboard_samples: Arc::new(Mutex::new(None)),
-            mouse_samples: Arc::new(Mutex::new(None)),
-            key_map: Arc::new(Mutex::new(HashMap::new())),
-            mouse_map: Arc::new(Mutex::new(HashMap::new())),
-            max_voices: 20, // Increased max voices to reduce audio interruptions
-            key_pressed: Arc::new(Mutex::new(HashMap::new())),
-            mouse_pressed: Arc::new(Mutex::new(HashMap::new())),
-            key_sinks: Arc::new(Mutex::new(HashMap::new())),
-            mouse_sinks: Arc::new(Mutex::new(HashMap::new())),
+            keyboard: SoundChannel::new(20, stream_handle.clone()), // Increased max voices to reduce audio interruptions
+            mouse: SoundChannel::new(20, stream_handle.clone()),
             device_manager,
         };
 
@@ -99,32 +84,20 @@ impl AudioContext {
         context
     }
 
-    pub fn set_volume(&self, volume: f32) {
-        // Update volume for current keys only
-        let key_sinks = self.key_sinks.lock().unwrap();
-        for sink in key_sinks.values() {
-            sink.set_volume(volume);
-        }
-
-        // Save to config file
+    pub fn set_keyboard_volume(&self, volume: f32) {
+        self.keyboard.set_volume(volume);
         AppConfig::update(|config| {
             config.volume = volume;
         });
     }
 
-    pub fn get_volume(&self) -> f32 {
+    pub fn get_keyboard_volume(&self) -> f32 {
         let config = AppConfig::get();
         config.volume
     }
 
     pub fn set_mouse_volume(&self, volume: f32) {
-        // Update volume for current mouse events only
-        let mouse_sinks = self.mouse_sinks.lock().unwrap();
-        for sink in mouse_sinks.values() {
-            sink.set_volume(volume);
-        }
-
-        // Save to config file
+        self.mouse.set_volume(volume);
         AppConfig::update(|config| {
             config.mouse_volume = volume;
         });
@@ -133,11 +106,6 @@ impl AudioContext {
     pub fn get_mouse_volume(&self) -> f32 {
         let config = AppConfig::get();
         config.mouse_volume
-    }
-
-    pub(crate) fn log_sound_latency(&self, event: &str, received_at: Instant) {
-        let ms = received_at.elapsed().as_secs_f32() * 1000.0;
-        log::debug!("⏱️ Sound '{}' input latency: {:.3} ms", event, ms,);
     }
 
     pub fn create_with_device(device_id: Option<String>) -> Result<Self, String> {
@@ -169,16 +137,8 @@ impl AudioContext {
 
         let context = Self {
             _stream: Arc::new(stream),
-            stream_handle,
-            keyboard_samples: Arc::new(Mutex::new(None)),
-            mouse_samples: Arc::new(Mutex::new(None)),
-            key_map: Arc::new(Mutex::new(HashMap::new())),
-            mouse_map: Arc::new(Mutex::new(HashMap::new())),
-            max_voices: 20, // Increased max voices to reduce audio interruptions
-            key_pressed: Arc::new(Mutex::new(HashMap::new())),
-            mouse_pressed: Arc::new(Mutex::new(HashMap::new())),
-            key_sinks: Arc::new(Mutex::new(HashMap::new())),
-            mouse_sinks: Arc::new(Mutex::new(HashMap::new())),
+            keyboard: SoundChannel::new(20, stream_handle.clone()),
+            mouse: SoundChannel::new(20, stream_handle.clone()),
             device_manager,
         };
 
@@ -206,129 +166,20 @@ impl AudioContext {
         }
     }
 
-    pub fn update_keyboard_context(
+    pub fn load_keyboard_mappings(
         &self,
         samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
-        key_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
+        mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
     ) -> Result<(), String> {
-        let (audio_samples, channels, sample_rate) = samples;
-        let sample_count = audio_samples.len();
-        let key_mapping_count = key_mappings.len();
-
-        // Update keyboard samples
-        if let Ok(mut cached) = self.keyboard_samples.lock() {
-            *cached = Some((audio_samples, channels, sample_rate));
-            log::info!("🎹 Updated keyboard samples: {} samples", sample_count);
-        } else {
-            return Err("Failed to acquire lock on keyboard_samples".to_string());
-        }
-
-        // Update key mappings
-        if let Ok(mut key_map) = self.key_map.lock() {
-            let old_count = key_map.len();
-            key_map.clear();
-
-            for (key, mappings) in key_mappings {
-                let converted_mappings: Vec<[f32; 2]> = mappings
-                    .into_iter()
-                    .map(|(start, end)| [start as f32, end as f32])
-                    .collect();
-                key_map.insert(key.clone(), converted_mappings);
-            }
-
-            log::info!(
-                "🗝️ Updated key mappings: {} -> {} keys",
-                old_count,
-                key_map.len()
-            );
-        } else {
-            return Err("Failed to acquire lock on key_map".to_string());
-        }
-
-        // Clear active keyboard audio state
-        if let Ok(mut sinks) = self.key_sinks.lock() {
-            let old_sinks = sinks.len();
-            sinks.clear();
-            if old_sinks > 0 {
-                log::info!("🔇 Cleared {} active key sinks", old_sinks);
-            }
-        }
-
-        if let Ok(mut pressed) = self.key_pressed.lock() {
-            let old_pressed = pressed.len();
-            pressed.clear();
-            if old_pressed > 0 {
-                log::info!("⌨️ Cleared {} pressed keys", old_pressed);
-            }
-        }
-
-        log::info!(
-            "✅ Successfully loaded {} keyboard sounds",
-            key_mapping_count
-        );
-        Ok(())
+        self.keyboard
+            .load_mappings(samples, mappings, PackKind::Keyboard)
     }
 
-    pub fn update_mouse_context(
+    pub fn load_mouse_mappings(
         &self,
         samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
-        mouse_mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
+        mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
     ) -> Result<(), String> {
-        let (audio_samples, channels, sample_rate) = samples;
-        let sample_count = audio_samples.len();
-        let mouse_mapping_count = mouse_mappings.len();
-
-        // Update mouse samples
-        if let Ok(mut cached) = self.mouse_samples.lock() {
-            *cached = Some((audio_samples, channels, sample_rate));
-            log::info!("🖱️ Updated mouse samples: {} samples", sample_count);
-        } else {
-            return Err("Failed to acquire lock on mouse_samples".to_string());
-        }
-
-        // Update mouse mappings
-        if let Ok(mut mouse_map) = self.mouse_map.lock() {
-            let old_count = mouse_map.len();
-            mouse_map.clear();
-
-            for (button, mappings) in mouse_mappings {
-                let converted_mappings: Vec<[f32; 2]> = mappings
-                    .into_iter()
-                    .map(|(start, end)| [start as f32, end as f32])
-                    .collect();
-                mouse_map.insert(button.clone(), converted_mappings);
-            }
-
-            log::info!(
-                "🖱️ Updated mouse mappings: {} -> {} buttons",
-                old_count,
-                mouse_map.len()
-            );
-        } else {
-            return Err("Failed to acquire lock on mouse_map".to_string());
-        }
-
-        // Clear active mouse audio state
-        if let Ok(mut mouse_sinks) = self.mouse_sinks.lock() {
-            let old_sinks = mouse_sinks.len();
-            mouse_sinks.clear();
-            if old_sinks > 0 {
-                log::info!("🔇 Cleared {} active mouse sinks", old_sinks);
-            }
-        }
-
-        if let Ok(mut mouse_pressed) = self.mouse_pressed.lock() {
-            let old_pressed = mouse_pressed.len();
-            mouse_pressed.clear();
-            if old_pressed > 0 {
-                log::info!("🖱️ Cleared {} pressed mouse buttons", old_pressed);
-            }
-        }
-
-        log::info!(
-            "✅ Successfully loaded mouse soundpack ({} mouse mappings) - Memory properly cleaned",
-            mouse_mapping_count
-        );
-        Ok(())
+        self.mouse.load_mappings(samples, mappings, PackKind::Mouse)
     }
 }
