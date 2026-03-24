@@ -3,13 +3,11 @@ use dioxus::prelude::*;
 use std::rc::Rc;
 
 /// Creates a config updater function that loads fresh config, applies changes, and saves
-fn create_config_updater(
-    config_signal: Signal<AppConfig>,
-) -> Rc<dyn Fn(Box<dyn FnOnce(&mut AppConfig)>)> {
+fn create_config_updater(config: Signal<AppConfig>) -> Rc<dyn Fn(Box<dyn FnOnce(&mut AppConfig)>)> {
     Rc::new(move |updater: Box<dyn FnOnce(&mut AppConfig)>| {
-        let mut config_signal = config_signal;
+        let mut config = config;
         AppConfig::update(updater);
-        config_signal.set(AppConfig::get().clone());
+        config.set(AppConfig::get().clone());
     })
 }
 
@@ -20,9 +18,8 @@ pub fn use_config() -> (
     Signal<AppConfig>,
     Rc<dyn Fn(Box<dyn FnOnce(&mut AppConfig)>)>,
 ) {
-    let config = AppConfig::get().clone();
-    let config_signal = Signal::new(config);
-    let update_config = create_config_updater(config_signal);
+    let config = use_signal(|| AppConfig::get().clone());
+    let update_config = create_config_updater(config);
 
-    (config_signal, update_config)
+    (config, update_config)
 }

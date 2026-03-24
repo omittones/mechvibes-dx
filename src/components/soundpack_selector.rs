@@ -1,5 +1,6 @@
-use crate::libs::audio::AudioContext;
+use crate::libs::audio::{AudioContext, load_soundpack_file};
 use crate::libs::soundpack::cache::{SoundpackRef, SoundpackType};
+use crate::state::app::use_app_state;
 use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use futures_timer::Delay;
@@ -33,7 +34,6 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
     let audio_ctx: Arc<AudioContext> = use_context();
 
     // Use the new event-driven app state
-    use crate::state::app::use_app_state;
     let app_state = use_app_state();
     let (config, update_config) = use_config();
 
@@ -45,6 +45,13 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
 
     // Use global app state for soundpacks
     let soundpacks = use_memo(move || app_state.get_soundpacks());
+
+    // Check if there are any soundpacks available for this type
+    let has_soundpacks = use_memo(move || {
+        soundpacks()
+            .into_iter()
+            .any(|pack| pack.id.soundpack_type == soundpack_type)
+    });
 
     // Get current soundpack based on type
     let current = use_memo(move || {
@@ -110,13 +117,6 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
             ),
         };
 
-    // Check if there are any soundpacks available for this type
-    let has_soundpacks = use_memo(move || {
-        soundpacks()
-            .into_iter()
-            .any(|pack| pack.id.soundpack_type == soundpack_type)
-    });
-
     let select_soundpack = |id: SoundpackRef| {
         let soundpack_id = id.clone();
         let audio_ctx = audio_ctx.clone();
@@ -132,13 +132,15 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
             }
             {
                 let soundpack_id = soundpack_id.clone();
-                update_config(Box::new(move |config| match soundpack_id.soundpack_type {
-                    SoundpackType::Keyboard => {
-                        config.keyboard_soundpack = soundpack_id.to_string();
-                    }
-                    SoundpackType::Mouse => {
-                        config.mouse_soundpack = soundpack_id.to_string();
-                    }
+                update_config(Box::new(move |config| {
+                    match soundpack_id.soundpack_type {
+                        SoundpackType::Keyboard => {
+                            config.keyboard_soundpack = soundpack_id.to_string();
+                        }
+                        SoundpackType::Mouse => {
+                            config.mouse_soundpack = soundpack_id.to_string();
+                        }
+                    };
                 }));
             }
             {
@@ -147,7 +149,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                 spawn(async move {
                     is_loading.set(true);
                     Delay::new(Duration::from_millis(1)).await;
-                    let result = crate::libs::audio::load_soundpack_file(&audio_ctx, &soundpack_id);
+                    let result = load_soundpack_file(&audio_ctx, &soundpack_id);
                     match result {
                         Ok(_) => {
                             log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());
@@ -266,7 +268,11 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                                         key: "{pack.id}",
                                         class: format!(
                                             "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-300 last:border-b-0 h-auto {}",
-                                            if current().is_some_and(|id| id == pack.id) { "btn-disabled" } else { "btn-ghost" },
+                                            if current().is_some_and(|id| id == pack.id) {
+                                                "btn-disabled"
+                                            } else {
+                                                "btn-ghost"
+                                            },
                                         ),
                                         disabled: current().is_some_and(|id| id == pack.id),
                                         onclick: select_soundpack(pack.id.clone()),
