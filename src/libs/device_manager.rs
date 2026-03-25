@@ -1,6 +1,13 @@
 use cpal::traits::{DeviceTrait, HostTrait};
 use cpal::{Device, Host};
 
+fn device_label(device: &Device) -> Option<String> {
+    device
+        .description()
+        .ok()
+        .map(|desc| desc.name().to_string())
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceInfo {
     pub id: String,
@@ -31,21 +38,20 @@ impl DeviceManager {
     pub fn get_output_devices(&self) -> Result<Vec<DeviceInfo>, String> {
         let mut devices = Vec::new();
         let default_device = self.host.default_output_device();
-        let default_name = default_device
-            .as_ref()
-            .and_then(|d| d.name().ok())
+        let default_name_key = default_device.as_ref().and_then(device_label);
+        let default_name = default_name_key
+            .clone()
             .unwrap_or_else(|| "Unknown".to_string());
 
         match self.host.output_devices() {
             Ok(device_iter) => {
                 for (index, device) in device_iter.enumerate() {
-                    if let Ok(name) = device.name() {
-                        let is_default = Some(&name)
-                            == default_device.as_ref().and_then(|d| d.name().ok()).as_ref();
+                    if let Some(name) = device_label(&device) {
+                        let is_default = default_name_key.as_deref() == Some(name.as_str());
 
                         devices.push(DeviceInfo {
                             id: format!("output_{}", index),
-                            name: name.clone(),
+                            name,
                             is_default,
                         });
                     }
@@ -72,21 +78,20 @@ impl DeviceManager {
     pub fn get_input_devices(&self) -> Result<Vec<DeviceInfo>, String> {
         let mut devices = Vec::new();
         let default_device = self.host.default_input_device();
-        let default_name = default_device
-            .as_ref()
-            .and_then(|d| d.name().ok())
+        let default_name_key = default_device.as_ref().and_then(device_label);
+        let default_name = default_name_key
+            .clone()
             .unwrap_or_else(|| "Unknown".to_string());
 
         match self.host.input_devices() {
             Ok(device_iter) => {
                 for (index, device) in device_iter.enumerate() {
-                    if let Ok(name) = device.name() {
-                        let is_default = Some(&name)
-                            == default_device.as_ref().and_then(|d| d.name().ok()).as_ref();
+                    if let Some(name) = device_label(&device) {
+                        let is_default = default_name_key.as_deref() == Some(name.as_str());
 
                         devices.push(DeviceInfo {
                             id: format!("input_{}", index),
-                            name: name.clone(),
+                            name,
                             is_default,
                         });
                     }

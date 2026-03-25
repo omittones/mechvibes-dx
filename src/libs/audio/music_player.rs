@@ -1,4 +1,5 @@
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use rodio::mixer::Mixer;
+use rodio::{Decoder, DeviceSinkBuilder, MixerDeviceSink, Player};
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
@@ -25,9 +26,8 @@ pub struct MusicStatus {
 }
 
 pub struct RodioMusicPlayer {
-    _stream: OutputStream,
-    stream_handle: OutputStreamHandle,
-    sink: Arc<Mutex<Option<Sink>>>,
+    _sink: MixerDeviceSink,
+    sink: Arc<Mutex<Option<Player>>>,
     status: Arc<Mutex<MusicStatus>>,
     command_sender: mpsc::UnboundedSender<MusicCommand>,
     status_receiver: Arc<Mutex<Option<mpsc::UnboundedReceiver<MusicStatus>>>>,
@@ -35,8 +35,10 @@ pub struct RodioMusicPlayer {
 
 impl RodioMusicPlayer {
     pub fn new() -> Result<Self, String> {
-        let (_stream, stream_handle) = OutputStream::try_default()
+        let mut device_sink = DeviceSinkBuilder::open_default_sink()
             .map_err(|e| format!("Failed to create audio output stream: {}", e))?;
+        device_sink.log_on_drop(false);
+        let mixer = device_sink.mixer().clone();
 
         let sink = Arc::new(Mutex::new(None));
         let status = Arc::new(Mutex::new(MusicStatus {
@@ -50,19 +52,17 @@ impl RodioMusicPlayer {
         let (command_sender, mut command_receiver) = mpsc::unbounded_channel::<MusicCommand>();
         let (status_sender, status_receiver) = mpsc::unbounded_channel::<MusicStatus>();
 
-        // Clone references for the background task
         let sink_clone = Arc::clone(&sink);
         let status_clone = Arc::clone(&status);
-        let stream_handle_clone = stream_handle.clone();
+        let mixer_clone = mixer.clone();
 
-        // Spawn background task to handle music commands
         tokio::spawn(async move {
             while let Some(command) = command_receiver.recv().await {
                 match command {
                     MusicCommand::Play(url) => {
                         if let Err(e) = Self::handle_play_command(
                             &sink_clone,
-                            &stream_handle_clone,
+                            &mixer_clone,
                             &status_clone,
                             &url,
                         )
@@ -94,7 +94,6 @@ impl RodioMusicPlayer {
                         let _ = status_sender.send(current_status);
                     }
                     MusicCommand::NextTrack => {
-                        // This will be handled by the UI layer
                         Self::handle_stop_command(&sink_clone, &status_clone);
                     }
                 }
@@ -102,8 +101,7 @@ impl RodioMusicPlayer {
         });
 
         Ok(Self {
-            _stream,
-            stream_handle,
+            _sink: device_sink,
             sink,
             status,
             command_sender,
@@ -112,12 +110,11 @@ impl RodioMusicPlayer {
     }
 
     async fn handle_play_command(
-        sink: &Arc<Mutex<Option<Sink>>>,
-        stream_handle: &OutputStreamHandle,
+        sink: &Arc<Mutex<Option<Player>>>,
+        mixer: &Mixer,
         status: &Arc<Mutex<MusicStatus>>,
         url: &str,
     ) -> Result<(), String> {
-        // Download the audio file
         let response = reqwest::get(url)
             .await
             .map_err(|e| format!("Failed to fetch audio: {}", e))?;
@@ -127,17 +124,12 @@ impl RodioMusicPlayer {
             .await
             .map_err(|e| format!("Failed to read audio data: {}", e))?;
 
-        // Create a cursor from the audio data
         let cursor = Cursor::new(audio_data.to_vec());
 
-        // Create decoder
-        let decoder = Decoder::new(cursor).map_err(|e| format!("Failed to decode audio: {}", e))?;
+        let decoder = Decoder::try_from(cursor).map_err(|e| format!("Failed to decode audio: {}", e))?;
 
-        // Create new sink
-        let new_sink = Sink::try_new(stream_handle)
-            .map_err(|e| format!("Failed to create audio sink: {}", e))?;
+        let new_sink = Player::connect_new(mixer);
 
-        // Update status and sink
         {
             let mut status_lock = status.lock().unwrap();
             status_lock.is_playing = true;
@@ -161,7 +153,7 @@ impl RodioMusicPlayer {
         Ok(())
     }
 
-    fn handle_pause_command(sink: &Arc<Mutex<Option<Sink>>>, status: &Arc<Mutex<MusicStatus>>) {
+    fn handle_pause_command(sink: &Arc<Mutex<Option<Player>>>, status: &Arc<Mutex<MusicStatus>>) {
         let mut status_lock = status.lock().unwrap();
         let sink_lock = sink.lock().unwrap();
 
@@ -172,7 +164,7 @@ impl RodioMusicPlayer {
         }
     }
 
-    fn handle_resume_command(sink: &Arc<Mutex<Option<Sink>>>, status: &Arc<Mutex<MusicStatus>>) {
+    fn handle_resume_command(sink: &Arc<Mutex<Option<Player>>>, status: &Arc<Mutex<MusicStatus>>) {
         let mut status_lock = status.lock().unwrap();
         let sink_lock = sink.lock().unwrap();
 
@@ -183,7 +175,7 @@ impl RodioMusicPlayer {
         }
     }
 
-    fn handle_stop_command(sink: &Arc<Mutex<Option<Sink>>>, status: &Arc<Mutex<MusicStatus>>) {
+    fn handle_stop_command(sink: &Arc<Mutex<Option<Player>>>, status: &Arc<Mutex<MusicStatus>>) {
         let mut status_lock = status.lock().unwrap();
         let mut sink_lock = sink.lock().unwrap();
 
@@ -197,7 +189,7 @@ impl RodioMusicPlayer {
     }
 
     fn handle_volume_command(
-        sink: &Arc<Mutex<Option<Sink>>>,
+        sink: &Arc<Mutex<Option<Player>>>,
         status: &Arc<Mutex<MusicStatus>>,
         volume: f32,
     ) {
@@ -217,7 +209,7 @@ impl RodioMusicPlayer {
     }
 
     fn handle_mute_command(
-        sink: &Arc<Mutex<Option<Sink>>>,
+        sink: &Arc<Mutex<Option<Player>>>,
         status: &Arc<Mutex<MusicStatus>>,
         muted: bool,
     ) {

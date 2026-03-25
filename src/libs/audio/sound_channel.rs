@@ -1,18 +1,20 @@
+use rodio::Player;
 use rodio::buffer::SamplesBuffer;
-use rodio::{OutputStreamHandle, Sink};
+use rodio::mixer::Mixer;
 use std::collections::HashMap;
+use std::num::NonZero;
 use std::time::Instant;
 
 pub(crate) type PcmBuffer = (Vec<f32>, u16, u32);
 
-/// PCM, per-input timing ranges (ms), press state, and active sinks for one input domain (keyboard or mouse).
+/// PCM, per-input timing ranges (ms), press state, and active players for one input domain (keyboard or mouse).
 pub(crate) struct SoundChannel {
     max_voices: usize,
-    stream_handle: OutputStreamHandle,
+    mixer: Mixer,
     samples: Option<PcmBuffer>,
     time_map: HashMap<String, Vec<[f32; 2]>>,
     pressed: HashMap<String, bool>,
-    sinks: HashMap<String, Sink>,
+    sinks: HashMap<String, Player>,
 }
 
 #[derive(Clone, Copy)]
@@ -22,10 +24,10 @@ pub(crate) enum PackKind {
 }
 
 impl SoundChannel {
-    pub fn new(max_voices: usize, stream_handle: OutputStreamHandle) -> Self {
+    pub fn new(max_voices: usize, mixer: Mixer) -> Self {
         Self {
             max_voices,
-            stream_handle,
+            mixer,
             samples: None,
             time_map: HashMap::new(),
             pressed: HashMap::new(),
@@ -85,7 +87,7 @@ impl SoundChannel {
         true
     }
 
-    /// Decode PCM slice, validate timing, append to a sink on [`Self::stream_handle`].
+    /// Decode PCM slice, validate timing, append to a player on [`Self::mixer`].
     fn play_pcm_segment(
         &mut self,
         code: &str,
@@ -106,6 +108,15 @@ impl SoundChannel {
 
         let Some((samples, channels, sample_rate)) = self.samples.clone() else {
             log::error!("❌ No PCM buffer available for {} '{}'", source_label, code);
+            return;
+        };
+
+        let Some(channels_nz) = NonZero::new(channels) else {
+            log::error!("❌ Invalid channel count 0 for {} '{}'", source_label, code);
+            return;
+        };
+        let Some(sample_rate_nz) = NonZero::new(sample_rate) else {
+            log::error!("❌ Invalid sample rate 0 for {} '{}'", source_label, code);
             return;
         };
 
@@ -161,8 +172,8 @@ impl SoundChannel {
 
             if clamped_duration > 1.0 && clamped_end_sample > start_sample {
                 let segment_samples = samples[start_sample..clamped_end_sample].to_vec();
-                let segment = SamplesBuffer::new(channels, sample_rate, segment_samples);
-                self.append_sink_for_segment(code, is_down, received_at, volume, segment);
+                let segment = SamplesBuffer::new(channels_nz, sample_rate_nz, segment_samples);
+                self.append_player_for_segment(code, is_down, received_at, volume, segment);
             }
             return;
         }
@@ -186,8 +197,8 @@ impl SoundChannel {
         }
 
         let segment_samples = samples[start_sample..end_sample].to_vec();
-        let segment = SamplesBuffer::new(channels, sample_rate, segment_samples);
-        self.append_sink_for_segment(code, is_down, received_at, volume, segment);
+        let segment = SamplesBuffer::new(channels_nz, sample_rate_nz, segment_samples);
+        self.append_player_for_segment(code, is_down, received_at, volume, segment);
     }
 
     fn log_sound_latency(&self, event: &str, received_at: Instant) {
@@ -195,32 +206,26 @@ impl SoundChannel {
         log::debug!("⏱️ Sound '{}' input latency: {:.3} ms", event, ms,);
     }
 
-    fn append_sink_for_segment(
+    fn append_player_for_segment(
         &mut self,
         code: &str,
         is_down: bool,
         received_at: Instant,
         volume: f32,
-        segment: SamplesBuffer<f32>,
+        segment: SamplesBuffer,
     ) {
-        match Sink::try_new(&self.stream_handle) {
-            Ok(sink) => {
-                sink.set_volume(volume);
-                sink.append(segment);
+        let sink = Player::connect_new(&self.mixer);
+        sink.set_volume(volume);
+        sink.append(segment);
 
-                self.log_sound_latency(code, received_at);
+        self.log_sound_latency(code, received_at);
 
-                self.cleanup_sinks();
+        self.cleanup_sinks();
 
-                self.sinks.insert(
-                    format!("{}-{}", code, if is_down { "down" } else { "up" }),
-                    sink,
-                );
-            }
-            Err(e) => {
-                log::error!("❌ Failed to create sink: {}", e);
-            }
-        }
+        self.sinks.insert(
+            format!("{}-{}", code, if is_down { "down" } else { "up" }),
+            sink,
+        );
     }
 
     fn resolve_segment_bounds_ms(&self, code: &str, is_down: bool) -> Option<(f32, f32)> {

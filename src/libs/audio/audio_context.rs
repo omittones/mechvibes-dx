@@ -1,22 +1,22 @@
+use super::sound_channel::SoundChannel;
 use crate::libs::audio::sound_channel::PackKind;
 use crate::libs::device_manager::DeviceManager;
 use crate::state::config::AppConfig;
-use rodio::OutputStream;
+use rodio::{DeviceSinkBuilder, MixerDeviceSink};
+use std::process;
 use std::time::Instant;
 
-use super::sound_channel::SoundChannel;
-
-struct SyncedOutputStream {
-    pub _stream: OutputStream,
+struct SyncedDeviceSink {
+    pub _sink: MixerDeviceSink,
 }
 
-// Safety: OutputStream contains a cpal::Stream with a raw pointer kept alive purely for RAII.
-// OutputStreamHandle is internally Arc-based. We never access _stream across threads.
-unsafe impl Send for SyncedOutputStream {}
-unsafe impl Sync for SyncedOutputStream {}
+// Safety: MixerDeviceSink contains a cpal::Stream with a raw pointer kept alive purely for RAII.
+// Mixer is internally Arc-based. We never access _sink across threads.
+unsafe impl Send for SyncedDeviceSink {}
+unsafe impl Sync for SyncedDeviceSink {}
 
 pub struct AudioContext {
-    _stream: SyncedOutputStream,
+    _sink: SyncedDeviceSink,
     keyboard: SoundChannel,
     mouse: SoundChannel,
 }
@@ -26,12 +26,13 @@ impl AudioContext {
         let device = AppConfig::get().selected_audio_device.clone();
         let device_manager = DeviceManager::new();
 
-        let (stream, stream_handle) = open_device(&device_manager, device);
+        let sink = open_device(&device_manager, device);
+        let mixer = sink.mixer().clone();
 
         let context = Self {
-            _stream: SyncedOutputStream { _stream: stream },
-            keyboard: SoundChannel::new(20, stream_handle.clone()), // Increased max voices to reduce audio interruptions
-            mouse: SoundChannel::new(20, stream_handle.clone()),
+            _sink: SyncedDeviceSink { _sink: sink },
+            keyboard: SoundChannel::new(20, mixer.clone()),
+            mouse: SoundChannel::new(20, mixer),
         };
 
         context
@@ -41,11 +42,12 @@ impl AudioContext {
         let device = AppConfig::get().selected_audio_device.clone();
         let device_manager = DeviceManager::new();
 
-        let (stream, stream_handle) = open_device(&device_manager, device);
+        let sink = open_device(&device_manager, device);
+        let mixer = sink.mixer().clone();
 
-        self._stream = SyncedOutputStream { _stream: stream };
-        self.keyboard = SoundChannel::new(20, stream_handle.clone());
-        self.mouse = SoundChannel::new(20, stream_handle.clone());
+        self._sink = SyncedDeviceSink { _sink: sink };
+        self.keyboard = SoundChannel::new(20, mixer.clone());
+        self.mouse = SoundChannel::new(20, mixer);
     }
 
     pub fn set_keyboard_volume(&self, volume: f32) {
@@ -131,39 +133,54 @@ impl AudioContext {
     }
 }
 
-fn open_device(
-    device_manager: &DeviceManager,
-    device: Option<String>,
-) -> (OutputStream, rodio::OutputStreamHandle) {
-    // Try to use selected device or fall back to default
-    let (stream, stream_handle) = match device {
-        Some(ref device_id) => match device_manager.get_output_device_by_id(device_id) {
-            Ok(Some(device)) => match OutputStream::try_from_device(&device) {
-                Ok((stream, handle)) => (stream, handle),
-                Err(e) => {
-                    log::error!(
-                        "❌ Failed to create stream from selected device {}: {}",
-                        device_id,
-                        e
-                    );
-                    log::info!("🔄 Falling back to default device...");
-                    OutputStream::try_default()
-                        .expect("Failed to create default audio output stream")
-                }
-            },
-            Ok(None) => {
-                log::error!(
-                    "❌ Selected audio device {} not found, using default",
-                    device_id
-                );
-                OutputStream::try_default().expect("Failed to create default audio output stream")
-            }
-            Err(e) => {
-                log::error!("❌ Error accessing selected device {}: {}", device_id, e);
-                OutputStream::try_default().expect("Failed to create default audio output stream")
-            }
+fn open_device(device_manager: &DeviceManager, device_id: Option<String>) -> MixerDeviceSink {
+    let builder = device_id.map_or_else(
+        || DeviceSinkBuilder::from_default_device(),
+        |device_id| {
+            device_manager
+                .get_output_device_by_id(&device_id)
+                .map_or_else(
+                    |error| {
+                        log::error!(
+                            "❌ Failed to get output device by id {}: {}",
+                            device_id,
+                            error
+                        );
+                        DeviceSinkBuilder::from_default_device()
+                    },
+                    |device| {
+                        device.map_or_else(
+                            || {
+                                log::error!("❌ Failed to get output device by id {}", &device_id);
+                                DeviceSinkBuilder::from_default_device()
+                            },
+                            |device| DeviceSinkBuilder::from_device(device),
+                        )
+                    },
+                )
         },
-        None => OutputStream::try_default().expect("Failed to create default audio output stream"),
+    );
+
+    let builder = match builder {
+        Ok(builder) => builder,
+        Err(error) => {
+            log::error!("❌ Failed to get output device builder: {}", error);
+            process::exit(1);
+        }
     };
-    (stream, stream_handle)
+
+    let sink = match builder
+        .with_error_callback(|error| {
+            log::error!("❌ !!!!!! Error accessing default device {}", error);
+        })
+        .open_sink_or_fallback()
+    {
+        Ok(sink) => sink,
+        Err(error) => {
+            log::error!("❌ Failed to create audio output stream: {}", error);
+            process::exit(1);
+        }
+    };
+
+    sink
 }
