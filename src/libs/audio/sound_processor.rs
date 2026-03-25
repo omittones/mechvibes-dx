@@ -1,5 +1,5 @@
 use crossbeam_channel as channel;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use super::audio_context::AudioContext;
@@ -18,7 +18,7 @@ pub struct UiEventChannels {
 /// still update `KeyboardState`. Mouse events have no UI representation, so
 /// they are consumed entirely on the sound thread.
 pub fn start_sound_processor(
-    audio_ctx: Arc<AudioContext>,
+    audio_ctx: Arc<Mutex<AudioContext>>,
     keyboard_rx: channel::Receiver<InputEvent>,
     mouse_rx: channel::Receiver<InputEvent>,
 ) -> UiEventChannels {
@@ -35,6 +35,7 @@ pub fn start_sound_processor(
                 loop {
                     match keyboard_rx.recv() {
                         Ok(event) => {
+                            let mut ctx = ctx.lock().unwrap();
                             ctx.play_key_event_sound(&event.code, event.is_down, event.received_at);
                             let _ = ui_keyboard_tx.send(event);
                         }
@@ -57,7 +58,12 @@ pub fn start_sound_processor(
                 loop {
                     match mouse_rx.recv() {
                         Ok(event) => {
-                            ctx.play_mouse_event_sound(&event.code, event.is_down, event.received_at);
+                            let mut ctx = ctx.lock().unwrap();
+                            ctx.play_mouse_event_sound(
+                                &event.code,
+                                event.is_down,
+                                event.received_at,
+                            );
                         }
                         Err(_) => break,
                     }

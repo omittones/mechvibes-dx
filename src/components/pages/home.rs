@@ -7,12 +7,12 @@ use crate::utils::constants::APP_NAME_DISPLAY;
 use dioxus::prelude::*;
 use futures_timer::Delay;
 use lucide_dioxus::Heart;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[component]
-pub fn HomePage(audio_ctx: Arc<AudioContext>) -> Element {
+pub fn HomePage() -> Element {
     // Use shared config hook
     let (config, update_config) = use_config();
 
@@ -28,15 +28,18 @@ pub fn HomePage(audio_ctx: Arc<AudioContext>) -> Element {
     let mouse_save_counter = use_signal(|| Arc::new(AtomicU64::new(0)));
 
     // Update audio system volume when the volume control changes (enable_sound is handled by sound_manager)
-    let ctx = audio_ctx.clone();
+    let audio_ctx: Arc<Mutex<AudioContext>> = use_context();
+    let audio_ctx1 = audio_ctx.clone();
     use_effect(move || {
-        ctx.set_keyboard_volume(volume());
+        let audio_ctx1 = audio_ctx1.lock().unwrap();
+        audio_ctx1.set_keyboard_volume(volume());
     });
 
     // Update audio system mouse volume when the mouse volume control changes
-    let ctx = audio_ctx.clone();
+    let audio_ctx2 = audio_ctx.clone();
     use_effect(move || {
-        ctx.set_mouse_volume(mouse_volume());
+        let audio_ctx2 = audio_ctx2.lock().unwrap();
+        audio_ctx2.set_mouse_volume(mouse_volume());
     });
 
     // Debounce effect for saving keyboard volume config changes

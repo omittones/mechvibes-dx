@@ -5,7 +5,7 @@ use crate::utils::config::use_config;
 use dioxus::prelude::*;
 use futures_timer::Delay;
 use lucide_dioxus::{Check, ChevronDown, Keyboard, Mouse, Music, Search};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Props, Clone, PartialEq)]
@@ -31,7 +31,7 @@ pub fn SoundpackSelector(props: SoundpackSelectorProps) -> Element {
 #[component]
 fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
     // Use audio context from the layout provider
-    let audio_ctx: Arc<AudioContext> = use_context();
+    let audio_ctx: Arc<Mutex<AudioContext>> = use_context();
 
     // Use the new event-driven app state
     let app_state = use_app_state();
@@ -149,7 +149,8 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                 spawn(async move {
                     is_loading.set(true);
                     Delay::new(Duration::from_millis(1)).await;
-                    let result = load_soundpack_file(&audio_ctx, &soundpack_id);
+                    let mut audio_ctx = audio_ctx.lock().unwrap();
+                    let result = load_soundpack_file(&mut audio_ctx, &soundpack_id);
                     match result {
                         Ok(_) => {
                             log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());

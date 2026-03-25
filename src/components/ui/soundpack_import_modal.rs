@@ -1,6 +1,7 @@
 use crate::{
     components::ui::{ImportStep, ProgressStep},
     libs::{
+        AudioContext,
         audio::load_soundpack_from_config,
         soundpack::{
             cache::SoundpackType,
@@ -16,12 +17,11 @@ use crate::{
 };
 use dioxus::prelude::*;
 use lucide_dioxus::FolderArchive;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[component]
 pub fn SoundpackImportModal(
     modal_id: String,
-    audio_ctx: Arc<crate::libs::audio::audio_context::AudioContext>,
     target_soundpack_type: Option<SoundpackType>,
     on_import_success: EventHandler<()>,
 ) -> Element {
@@ -77,7 +77,7 @@ pub fn SoundpackImportModal(
         }
     }; // File import handler
     let handle_import_click = {
-        let audio_ctx = audio_ctx.clone();
+        let audio_ctx: Arc<Mutex<AudioContext>> = use_context();
         let app_state = app_state.clone();
         let state_trigger = state_trigger.clone();
         let reset_modal = reset_modal.clone();
@@ -222,7 +222,10 @@ pub fn SoundpackImportModal(
                 delay::Delay::ms(500).await;
 
                 // Reload soundpacks in audio context
-                let _ = load_soundpack_from_config(&audio_ctx, true);
+                {
+                    let mut audio_ctx = audio_ctx.lock().unwrap();
+                    let _ = load_soundpack_from_config(&mut audio_ctx, true);
+                }
 
                 // =============================================
                 // Step 6: Refreshing soundpack list

@@ -1,12 +1,15 @@
-use crate::{libs::audio::load_soundpack_from_config, state::app::use_app_state};
+use crate::{
+    libs::{AudioContext, audio::load_soundpack_from_config},
+    state::app::use_app_state,
+};
 use dioxus::prelude::*;
 use lucide_dioxus::{ExternalLink, FolderOpen, RefreshCcw};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 #[component]
 pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
     let app_state = use_app_state();
-    let audio_ctx: Arc<crate::libs::audio::AudioContext> = use_context();
+    let audio_ctx: Arc<Mutex<AudioContext>> = use_context();
     let state_trigger = crate::state::app::use_state_trigger(); // UI state for notification and loading
     let refreshing_soundpacks = use_signal(|| false);
     let refresh_soundpacks_cache = {
@@ -43,9 +46,12 @@ pub fn SoundpackManager(on_import_click: EventHandler<MouseEvent>) -> Element {
                 trigger.call(());
                 log::debug!("🔄 State trigger called successfully");
 
-                // Reload current soundpacks to apply any changes
-                log::debug!("🔄 Reloading current soundpacks...");
-                let _ = load_soundpack_from_config(&audio_ctx_clone, false);
+                {
+                    // Reload current soundpacks to apply any changes
+                    log::debug!("🔄 Reloading current soundpacks...");
+                    let mut audio_ctx_clone = audio_ctx_clone.lock().unwrap();
+                    let _ = load_soundpack_from_config(&mut audio_ctx_clone, false);
+                }
 
                 // Add another small delay before changing the loading state back
                 Delay::new(Duration::from_millis(100)).await;

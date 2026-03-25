@@ -1,20 +1,18 @@
 use rodio::buffer::SamplesBuffer;
 use rodio::{OutputStreamHandle, Sink};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 pub(crate) type PcmBuffer = (Vec<f32>, u16, u32);
 
 /// PCM, per-input timing ranges (ms), press state, and active sinks for one input domain (keyboard or mouse).
-#[derive(Clone)]
 pub(crate) struct SoundChannel {
     max_voices: usize,
     stream_handle: OutputStreamHandle,
-    samples: Arc<Mutex<Option<PcmBuffer>>>,
-    time_map: Arc<Mutex<HashMap<String, Vec<[f32; 2]>>>>,
-    pressed: Arc<Mutex<HashMap<String, bool>>>,
-    sinks: Arc<Mutex<HashMap<String, Sink>>>,
+    samples: Option<PcmBuffer>,
+    time_map: HashMap<String, Vec<[f32; 2]>>,
+    pressed: HashMap<String, bool>,
+    sinks: HashMap<String, Sink>,
 }
 
 #[derive(Clone, Copy)]
@@ -28,22 +26,21 @@ impl SoundChannel {
         Self {
             max_voices,
             stream_handle,
-            samples: Arc::new(Mutex::new(None)),
-            time_map: Arc::new(Mutex::new(HashMap::new())),
-            pressed: Arc::new(Mutex::new(HashMap::new())),
-            sinks: Arc::new(Mutex::new(HashMap::new())),
+            samples: None,
+            time_map: HashMap::new(),
+            pressed: HashMap::new(),
+            sinks: HashMap::new(),
         }
     }
 
     pub fn set_volume(&self, volume: f32) {
-        let key_sinks = self.sinks.lock().unwrap();
-        for sink in key_sinks.values() {
+        for sink in self.sinks.values() {
             sink.set_volume(volume);
         }
     }
 
     pub fn play_event_sound(
-        &self,
+        &mut self,
         key: &str,
         is_keydown: bool,
         volume: f32,
@@ -68,30 +65,29 @@ impl SoundChannel {
             source_label,
         );
 
-        self.remove_finished_sinks();
+        self.cleanup_sinks();
     }
 
     /// Returns `true` if this down/up edge should be processed: updates [`Self::pressed`] and allows
     /// playback. Returns `false` when the edge is ignored (already down on down, or up while not down).
-    fn should_play_sound(&self, code: &str, is_down: bool) -> bool {
-        let mut pressed = self.pressed.lock().unwrap();
+    fn should_play_sound(&mut self, code: &str, is_down: bool) -> bool {
         if is_down {
-            if *pressed.get(code).unwrap_or(&false) {
+            if *self.pressed.get(code).unwrap_or(&false) {
                 return false;
             }
-            pressed.insert(code.to_string(), true);
+            self.pressed.insert(code.to_string(), true);
         } else {
-            if !*pressed.get(code).unwrap_or(&false) {
+            if !*self.pressed.get(code).unwrap_or(&false) {
                 return false;
             }
-            pressed.insert(code.to_string(), false);
+            self.pressed.insert(code.to_string(), false);
         }
         true
     }
 
     /// Decode PCM slice, validate timing, append to a sink on [`Self::stream_handle`].
     fn play_pcm_segment(
-        &self,
+        &mut self,
         code: &str,
         start: f32,
         end: f32,
@@ -108,8 +104,7 @@ impl SoundChannel {
             end,
         );
 
-        let pcm_opt = self.samples.lock().unwrap().clone();
-        let Some((samples, channels, sample_rate)) = pcm_opt else {
+        let Some((samples, channels, sample_rate)) = self.samples.clone() else {
             log::error!("❌ No PCM buffer available for {} '{}'", source_label, code);
             return;
         };
@@ -201,31 +196,35 @@ impl SoundChannel {
     }
 
     fn append_sink_for_segment(
-        &self,
+        &mut self,
         code: &str,
         is_down: bool,
         received_at: Instant,
         volume: f32,
         segment: SamplesBuffer<f32>,
     ) {
-        if let Ok(sink) = Sink::try_new(&self.stream_handle) {
-            sink.set_volume(volume);
-            sink.append(segment);
-            self.log_sound_latency(code, received_at);
+        match Sink::try_new(&self.stream_handle) {
+            Ok(sink) => {
+                sink.set_volume(volume);
+                sink.append(segment);
 
-            let mut sinks = self.sinks.lock().unwrap();
-            self.manage_active_sinks(self.max_voices, &mut sinks);
-            sinks.insert(
-                format!("{}-{}", code, if is_down { "down" } else { "up" }),
-                sink,
-            );
+                self.log_sound_latency(code, received_at);
+
+                self.cleanup_sinks();
+
+                self.sinks.insert(
+                    format!("{}-{}", code, if is_down { "down" } else { "up" }),
+                    sink,
+                );
+            }
+            Err(e) => {
+                log::error!("❌ Failed to create sink: {}", e);
+            }
         }
     }
 
-    /// Looks up `(start_ms, end_ms)` for a down/up edge. Logging differs by profile; mouse stays quiet on unmapped.
     fn resolve_segment_bounds_ms(&self, code: &str, is_down: bool) -> Option<(f32, f32)> {
-        let map = self.time_map.lock().unwrap();
-        match map.get(code) {
+        match self.time_map.get(code) {
             Some(arr) if arr.len() == 2 => {
                 let idx = if is_down { 0 } else { 1 };
                 let arr = arr[idx];
@@ -284,7 +283,7 @@ impl SoundChannel {
     }
 
     pub(crate) fn load_mappings(
-        &self,
+        &mut self,
         samples: PcmBuffer,
         mappings: HashMap<String, Vec<(f64, f64)>>,
         kind: PackKind,
@@ -293,81 +292,57 @@ impl SoundChannel {
         let sample_count = audio_samples.len();
         let mapping_count = mappings.len();
 
-        {
-            let mut cached = self
-                .samples
-                .lock()
-                .map_err(|_| "Failed to acquire lock on samples".to_string())?;
-            *cached = Some((audio_samples, channels, sample_rate));
+        self.samples = Some((audio_samples, channels, sample_rate));
+        match kind {
+            PackKind::Keyboard => {
+                log::info!("🎹 Updated keyboard samples: {} samples", sample_count);
+            }
+            PackKind::Mouse => {
+                log::info!("🖱️ Updated mouse samples: {} samples", sample_count);
+            }
+        }
+
+        let old_count = self.time_map.len();
+        self.time_map.clear();
+        for (id, ranges) in mappings {
+            let converted: Vec<[f32; 2]> = ranges
+                .into_iter()
+                .map(|(start, end)| [start as f32, end as f32])
+                .collect();
+            self.time_map.insert(id, converted);
+        }
+        match kind {
+            PackKind::Keyboard => {
+                log::info!(
+                    "🗝️ Updated key mappings: {} -> {} keys",
+                    old_count,
+                    self.time_map.len()
+                );
+            }
+            PackKind::Mouse => {
+                log::info!(
+                    "🖱️ Updated mouse mappings: {} -> {} buttons",
+                    old_count,
+                    self.time_map.len()
+                );
+            }
+        }
+
+        let old_sinks = self.sinks.len();
+        self.sinks.clear();
+        if old_sinks > 0 {
+            log::info!("🔇 Cleared {} active sinks", old_sinks);
+        }
+
+        let old_pressed = self.pressed.len();
+        self.pressed.clear();
+        if old_pressed > 0 {
             match kind {
                 PackKind::Keyboard => {
-                    log::info!("🎹 Updated keyboard samples: {} samples", sample_count);
+                    log::info!("⌨️ Cleared {} pressed keys", old_pressed);
                 }
                 PackKind::Mouse => {
-                    log::info!("🖱️ Updated mouse samples: {} samples", sample_count);
-                }
-            }
-        }
-
-        {
-            let mut map = self
-                .time_map
-                .lock()
-                .map_err(|_| "Failed to acquire lock on time map".to_string())?;
-            let old_count = map.len();
-            map.clear();
-            for (id, ranges) in mappings {
-                let converted: Vec<[f32; 2]> = ranges
-                    .into_iter()
-                    .map(|(start, end)| [start as f32, end as f32])
-                    .collect();
-                map.insert(id, converted);
-            }
-            match kind {
-                PackKind::Keyboard => {
-                    log::info!(
-                        "🗝️ Updated key mappings: {} -> {} keys",
-                        old_count,
-                        map.len()
-                    );
-                }
-                PackKind::Mouse => {
-                    log::info!(
-                        "🖱️ Updated mouse mappings: {} -> {} buttons",
-                        old_count,
-                        map.len()
-                    );
-                }
-            }
-        }
-
-        {
-            let mut sinks = self
-                .sinks
-                .lock()
-                .map_err(|_| "Failed to acquire lock on sinks".to_string())?;
-            let old_sinks = sinks.len();
-            sinks.clear();
-            if old_sinks > 0 {
-                log::info!("🔇 Cleared {} active sinks", old_sinks);
-            }
-        }
-
-        {
-            let mut pressed = self
-                .pressed
-                .lock()
-                .map_err(|_| "Failed to acquire lock on pressed state".to_string())?;
-            let old_pressed = pressed.len();
-            pressed.clear();
-            if old_pressed > 0 {
-                match kind {
-                    PackKind::Keyboard => {
-                        log::info!("⌨️ Cleared {} pressed keys", old_pressed);
-                    }
-                    PackKind::Mouse => {
-                        log::info!("🖱️ Cleared {} pressed mouse buttons", old_pressed);
-                    }
+                    log::info!("🖱️ Cleared {} pressed mouse buttons", old_pressed);
                 }
             }
         }
@@ -386,39 +361,14 @@ impl SoundChannel {
         Ok(())
     }
 
-    fn manage_active_sinks(
-        &self,
-        max_voices: usize,
-        sinks: &mut MutexGuard<HashMap<String, Sink>>,
-    ) {
-        let finished: Vec<String> = sinks
-            .iter()
-            .filter(|(_, sink)| sink.empty())
-            .map(|(k, _)| k.clone())
-            .collect();
-        for k in finished {
-            sinks.remove(&k);
-        }
+    fn cleanup_sinks(&mut self) {
+        self.sinks.retain(|_, sink| !sink.empty());
 
-        if sinks.len() >= max_voices {
-            if let Some((old_key, _)) = sinks.iter().next().map(|(k, _)| (k.clone(), ())) {
-                sinks.remove(&old_key);
-                if let Ok(mut pressed) = self.pressed.lock() {
-                    pressed.insert(old_key, false);
-                }
-            }
-        }
-    }
-
-    fn remove_finished_sinks(&self) {
-        if let Ok(mut sinks) = self.sinks.lock() {
-            let finished: Vec<String> = sinks
-                .iter()
-                .filter(|(_, sink)| sink.empty())
-                .map(|(k, _)| k.clone())
-                .collect();
-            for key in finished {
-                sinks.remove(&key);
+        while self.sinks.len() >= self.max_voices {
+            if let Some(key) = self.sinks.keys().next().cloned() {
+                self.sinks.remove(&key);
+            } else {
+                break;
             }
         }
     }

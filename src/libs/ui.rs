@@ -14,7 +14,19 @@ use dioxus::desktop::RequestAsyncResponder;
 use dioxus::desktop::tao::event::Event as TaoEvent;
 use dioxus::desktop::{use_asset_handler, use_wry_event_handler, wry::http::Response};
 use dioxus::prelude::*;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, Mutex};
+
+static AUDIO_CONTEXT: LazyLock<Arc<Mutex<AudioContext>>> = LazyLock::new(|| {
+    let mut context = AudioContext::new();
+
+    // Load soundpack from config
+    match load_soundpack_from_config(&mut context, false) {
+        Ok(_) => {}
+        Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),
+    }
+
+    Arc::new(Mutex::new(context))
+});
 
 pub fn app() -> Element {
     // Loading state to prevent FOUC
@@ -39,17 +51,14 @@ pub fn app() -> Element {
     // Provide the keyboard state context to all child components
     use_context_provider(|| keyboard_state);
 
-    // Initialize the audio system for mechvibes sounds - moved here to be accessible by both keyboard processing and UI
-    let audio_context = use_hook(|| Arc::new(AudioContext::new()));
-
     // Provide audio context to all child components (this will be used by Layout and other components)
-    use_context_provider(|| audio_context.clone());
+    use_context_provider(|| AUDIO_CONTEXT.clone());
     {
         // Load current soundpacks on startup
-        let ctx = audio_context.clone();
         use_effect(move || {
             log::debug!("🎵 Loading current soundpacks on startup...");
-            let _ = load_soundpack_from_config(&ctx, true);
+            let mut ctx = AUDIO_CONTEXT.lock().unwrap();
+            let _ = load_soundpack_from_config(&mut ctx, true);
         });
     }
 
@@ -79,7 +88,7 @@ pub fn app() -> Element {
     // Keyboard events are forwarded to ui_channels for UI state updates only.
     let ui_channels = use_hook(|| {
         start_sound_processor(
-            audio_context.clone(),
+            AUDIO_CONTEXT.clone(),
             input_channels.keyboard_rx.clone(),
             input_channels.mouse_rx.clone(),
         )
