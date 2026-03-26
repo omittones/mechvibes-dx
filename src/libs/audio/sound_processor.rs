@@ -35,16 +35,20 @@ pub fn start_sound_processor(
                 loop {
                     match keyboard_rx.recv() {
                         Ok(event) => {
+                            log::debug!("🎹 Playing keyboard event: {}", event);
                             let mut ctx = ctx.lock().unwrap();
                             ctx.play_key_event_sound(&event.code, event.is_down, event.received_at);
                             let _ = ui_keyboard_tx.send(event);
                         }
-                        Err(_) => break,
+                        Err(err) => {
+                            log::error!("❌ Keyboard sound processor thread error: {}", err);
+                            break;
+                        }
                     }
                 }
                 log::info!("🎹 Keyboard sound processor thread exiting");
             })
-            .expect("failed to spawn keyboard sound thread");
+            .expect("Failed to spawn keyboard sound thread");
     }
 
     // Mouse sound thread — blocks until an event arrives, plays immediately.
@@ -58,6 +62,7 @@ pub fn start_sound_processor(
                 loop {
                     match mouse_rx.recv() {
                         Ok(event) => {
+                            log::debug!("🖱️ Playing mouse event: {}", event);
                             let mut ctx = ctx.lock().unwrap();
                             ctx.play_mouse_event_sound(
                                 &event.code,
@@ -65,12 +70,15 @@ pub fn start_sound_processor(
                                 event.received_at,
                             );
                         }
-                        Err(_) => break,
+                        Err(err) => {
+                            log::error!("❌ Mouse sound processor thread error: {}", err);
+                            break;
+                        }
                     }
                 }
                 log::info!("🖱️ Mouse sound processor thread exiting");
             })
-            .expect("failed to spawn mouse sound thread");
+            .expect("Failed to spawn mouse sound thread");
     }
 
     UiEventChannels {

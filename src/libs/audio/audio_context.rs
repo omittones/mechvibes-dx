@@ -1,10 +1,11 @@
 use super::sound_channel::SoundChannel;
 use crate::libs::audio::load_soundpack_from_config;
-use crate::libs::audio::sound_channel::PackKind;
+use crate::libs::audio::sound_channel::{PackKind, PcmBuffer};
 use crate::libs::device_manager::DeviceManager;
 use crate::state::config::AppConfig;
 use cpal::StreamError;
 use rodio::{DeviceSinkBuilder, MixerDeviceSink};
+use std::collections::HashMap;
 use std::process;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Instant;
@@ -60,8 +61,8 @@ impl AudioContext {
         let mixer = sink.mixer().clone();
 
         self._sink = SyncedDeviceSink { _sink: sink };
-        self.keyboard = SoundChannel::new(20, mixer.clone());
-        self.mouse = SoundChannel::new(20, mixer);
+        self.keyboard = self.keyboard.replace_mixer(&mixer);
+        self.mouse = self.mouse.replace_mixer(&mixer);
     }
 
     pub fn set_keyboard_volume(&self, volume: f32) {
@@ -90,8 +91,8 @@ impl AudioContext {
 
     pub fn load_keyboard_mappings(
         &mut self,
-        samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
-        mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
+        samples: PcmBuffer,
+        mappings: HashMap<String, Vec<(f64, f64)>>,
     ) -> Result<(), String> {
         self.keyboard
             .load_mappings(samples, mappings, PackKind::Keyboard)
@@ -99,8 +100,8 @@ impl AudioContext {
 
     pub fn load_mouse_mappings(
         &mut self,
-        samples: (Vec<f32>, u16, u32), // (samples, channels, sample_rate)
-        mappings: std::collections::HashMap<String, Vec<(f64, f64)>>,
+        samples: PcmBuffer,
+        mappings: HashMap<String, Vec<(f64, f64)>>,
     ) -> Result<(), String> {
         self.mouse.load_mappings(samples, mappings, PackKind::Mouse)
     }
@@ -158,6 +159,14 @@ impl AudioContext {
 fn open_device(device_id: Option<String>) -> MixerDeviceSink {
     let device_manager = DeviceManager::new();
 
+    log::info!(
+        "🔊 Opening device: {}",
+        device_id
+            .as_ref()
+            .unwrap_or(&"default".to_string())
+            .to_string()
+    );
+
     let builder = device_id.map_or_else(
         || DeviceSinkBuilder::from_default_device(),
         |device_id| {
@@ -165,17 +174,15 @@ fn open_device(device_id: Option<String>) -> MixerDeviceSink {
                 .get_output_device_by_id(&device_id)
                 .map_or_else(
                     |error| {
-                        log::error!(
-                            "❌ Failed to get output device by id {}: {}",
-                            device_id,
-                            error
-                        );
+                        log::error!("❌ Failed to get output device ({}), using default", error);
                         DeviceSinkBuilder::from_default_device()
                     },
                     |device| {
                         device.map_or_else(
                             || {
-                                log::error!("❌ Failed to get output device by id {}", &device_id);
+                                log::error!(
+                                    "❌ Failed to get output device (missing device), using default"
+                                );
                                 DeviceSinkBuilder::from_default_device()
                             },
                             |device| DeviceSinkBuilder::from_device(device),

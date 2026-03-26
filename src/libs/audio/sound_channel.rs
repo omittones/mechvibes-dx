@@ -14,7 +14,7 @@ pub(crate) struct SoundChannel {
     samples: Option<PcmBuffer>,
     time_map: HashMap<String, Vec<[f32; 2]>>,
     pressed: HashMap<String, bool>,
-    sinks: HashMap<String, Player>,
+    players: HashMap<String, Player>,
 }
 
 #[derive(Clone, Copy)]
@@ -31,12 +31,23 @@ impl SoundChannel {
             samples: None,
             time_map: HashMap::new(),
             pressed: HashMap::new(),
-            sinks: HashMap::new(),
+            players: HashMap::new(),
+        }
+    }
+
+    pub fn replace_mixer(&self, mixer: &Mixer) -> Self {
+        Self {
+            mixer: mixer.clone(),
+            max_voices: self.max_voices,
+            samples: self.samples.clone(),
+            time_map: self.time_map.clone(),
+            pressed: self.pressed.clone(),
+            players: HashMap::new(),
         }
     }
 
     pub fn set_volume(&self, volume: f32) {
-        for sink in self.sinks.values() {
+        for sink in self.players.values() {
             sink.set_volume(volume);
         }
     }
@@ -67,7 +78,7 @@ impl SoundChannel {
             source_label,
         );
 
-        self.cleanup_sinks();
+        self.cleanup_players();
     }
 
     /// Returns `true` if this down/up edge should be processed: updates [`Self::pressed`] and allows
@@ -214,17 +225,17 @@ impl SoundChannel {
         volume: f32,
         segment: SamplesBuffer,
     ) {
-        let sink = Player::connect_new(&self.mixer);
-        sink.set_volume(volume);
-        sink.append(segment);
+        let player = Player::connect_new(&self.mixer);
+        player.set_volume(volume);
+        player.append(segment);
 
         self.log_sound_latency(code, received_at);
 
-        self.cleanup_sinks();
+        self.cleanup_players();
 
-        self.sinks.insert(
+        self.players.insert(
             format!("{}-{}", code, if is_down { "down" } else { "up" }),
-            sink,
+            player,
         );
     }
 
@@ -333,10 +344,10 @@ impl SoundChannel {
             }
         }
 
-        let old_sinks = self.sinks.len();
-        self.sinks.clear();
-        if old_sinks > 0 {
-            log::info!("🔇 Cleared {} active sinks", old_sinks);
+        let old_players = self.players.len();
+        self.players.clear();
+        if old_players > 0 {
+            log::info!("🔇 Cleared {} active sinks", old_players);
         }
 
         let old_pressed = self.pressed.len();
@@ -369,8 +380,8 @@ impl SoundChannel {
     pub(crate) fn clear_mappings(&mut self) {
         self.samples = None;
         self.time_map.clear();
-        let old_sinks = self.sinks.len();
-        self.sinks.clear();
+        let old_sinks = self.players.len();
+        self.players.clear();
         if old_sinks > 0 {
             log::info!("🔇 Cleared {} active sinks", old_sinks);
         }
@@ -382,12 +393,12 @@ impl SoundChannel {
         log::info!("🎹 Cleared keyboard soundpack from memory");
     }
 
-    fn cleanup_sinks(&mut self) {
-        self.sinks.retain(|_, sink| !sink.empty());
+    fn cleanup_players(&mut self) {
+        self.players.retain(|_, player| !player.empty());
 
-        while self.sinks.len() >= self.max_voices {
-            if let Some(key) = self.sinks.keys().next().cloned() {
-                self.sinks.remove(&key);
+        while self.players.len() >= self.max_voices {
+            if let Some(key) = self.players.keys().next().cloned() {
+                self.players.remove(&key);
             } else {
                 break;
             }
