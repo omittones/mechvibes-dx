@@ -1,10 +1,26 @@
 use super::sound_channel::SoundChannel;
+use crate::libs::audio::load_soundpack_from_config;
 use crate::libs::audio::sound_channel::PackKind;
 use crate::libs::device_manager::DeviceManager;
 use crate::state::config::AppConfig;
+use cpal::StreamError;
 use rodio::{DeviceSinkBuilder, MixerDeviceSink};
 use std::process;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::Instant;
+
+pub static AUDIO_CONTEXT: LazyLock<Arc<Mutex<AudioContext>>> = LazyLock::new(|| {
+    let mut context = AudioContext::new();
+
+    // Load soundpack from config
+    // TODO - move this somewhere else to AC does not depend on anything
+    match load_soundpack_from_config(&mut context, false) {
+        Ok(_) => {}
+        Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),
+    }
+
+    Arc::new(Mutex::new(context))
+});
 
 struct SyncedDeviceSink {
     pub _sink: MixerDeviceSink,
@@ -24,9 +40,8 @@ pub struct AudioContext {
 impl AudioContext {
     pub fn new() -> Self {
         let device = AppConfig::get().selected_audio_device.clone();
-        let device_manager = DeviceManager::new();
 
-        let sink = open_device(&device_manager, device);
+        let sink = open_device(device);
         let mixer = sink.mixer().clone();
 
         let context = Self {
@@ -40,9 +55,8 @@ impl AudioContext {
 
     pub fn reconnect(&mut self) {
         let device = AppConfig::get().selected_audio_device.clone();
-        let device_manager = DeviceManager::new();
 
-        let sink = open_device(&device_manager, device);
+        let sink = open_device(device);
         let mixer = sink.mixer().clone();
 
         self._sink = SyncedDeviceSink { _sink: sink };
@@ -133,7 +147,9 @@ impl AudioContext {
     }
 }
 
-fn open_device(device_manager: &DeviceManager, device_id: Option<String>) -> MixerDeviceSink {
+fn open_device(device_id: Option<String>) -> MixerDeviceSink {
+    let device_manager = DeviceManager::new();
+
     let builder = device_id.map_or_else(
         || DeviceSinkBuilder::from_default_device(),
         |device_id| {
@@ -170,8 +186,16 @@ fn open_device(device_manager: &DeviceManager, device_id: Option<String>) -> Mix
     };
 
     let sink = match builder
-        .with_error_callback(|error| {
-            log::error!("❌ !!!!!! Error accessing default device {}", error);
+        .with_error_callback(|error| match error {
+            StreamError::DeviceNotAvailable | StreamError::StreamInvalidated => {
+                log::warn!("⚠️ Device not available, reconnecting...");
+                let mut ctx = AUDIO_CONTEXT.lock().unwrap();
+                ctx.reconnect();
+            }
+            _ => {
+                log::error!("❌ Error accessing device {:?}", error);
+                process::exit(1);
+            }
         })
         .open_sink_or_fallback()
     {

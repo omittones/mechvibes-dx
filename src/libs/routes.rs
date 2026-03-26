@@ -80,7 +80,7 @@ pub fn Layout() -> Element {
 #[component]
 pub fn Home() -> Element {
     rsx! {
-        crate::components::pages::HomePage { }
+        crate::components::pages::HomePage {}
     }
 }
 

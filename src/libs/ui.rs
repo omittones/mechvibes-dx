@@ -1,6 +1,6 @@
 use crate::components::header::Header;
 use crate::components::window_controller::WindowController;
-use crate::libs::AudioContext;
+use crate::libs::audio::audio_context::AUDIO_CONTEXT;
 use crate::libs::audio::{load_soundpack_from_config, start_sound_processor};
 use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
@@ -14,19 +14,6 @@ use dioxus::desktop::RequestAsyncResponder;
 use dioxus::desktop::tao::event::Event as TaoEvent;
 use dioxus::desktop::{use_asset_handler, use_wry_event_handler, wry::http::Response};
 use dioxus::prelude::*;
-use std::sync::{Arc, LazyLock, Mutex};
-
-static AUDIO_CONTEXT: LazyLock<Arc<Mutex<AudioContext>>> = LazyLock::new(|| {
-    let mut context = AudioContext::new();
-
-    // Load soundpack from config
-    match load_soundpack_from_config(&mut context, false) {
-        Ok(_) => {}
-        Err(e) => log::error!("❌ Failed to load initial soundpack: {}", e),
-    }
-
-    Arc::new(Mutex::new(context))
-});
 
 pub fn app() -> Element {
     // Loading state to prevent FOUC

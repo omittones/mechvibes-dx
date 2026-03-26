@@ -220,6 +220,8 @@ pub fn SettingsPage() -> Element {
                     // Check if there's a saved update in config even if not in current state
 
 
+
+
                                                         let info_clone = info.clone();
                                                         update_config(
                                                             Box::new(move |config| {

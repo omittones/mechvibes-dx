@@ -1,5 +1,5 @@
 use crate::libs::audio::{AudioContext, load_soundpack_file};
-use crate::libs::soundpack::cache::{SoundpackRef, SoundpackType};
+use crate::libs::soundpack::cache::{SoundpackMetadata, SoundpackRef, SoundpackType};
 use crate::state::app::use_app_state;
 use crate::utils::config::use_config;
 use dioxus::prelude::*;
@@ -15,6 +15,12 @@ pub struct SoundpackSelectorProps {
     pub label: String,
 }
 
+#[derive(Clone, PartialEq)]
+pub enum DropDownItem {
+    ClearSelection,
+    Soundpack(SoundpackMetadata),
+}
+
 #[component]
 pub fn SoundpackSelector(props: SoundpackSelectorProps) -> Element {
     rsx! {
@@ -24,6 +30,91 @@ pub fn SoundpackSelector(props: SoundpackSelectorProps) -> Element {
                 "{props.label}"
             }
             SoundpackDropdown { soundpack_type: props.soundpack_type }
+        }
+    }
+}
+
+#[derive(Props, Clone, PartialEq)]
+pub struct SoundpackItemProps {
+    pub item: SoundpackMetadata,
+    pub is_selected: bool,
+    pub select_soundpack: Callback<SoundpackRef, ()>,
+}
+
+#[component]
+fn SoundpackItem(props: SoundpackItemProps) -> Element {
+    let item = props.item;
+    let select_soundpack = props.select_soundpack;
+    let is_selected = props.is_selected;
+
+    rsx! {
+        button {
+            key: "{item.id}",
+            class: "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-300 last:border-b-0 h-auto btn-ghost",
+            disabled: false,
+            onclick: move |_| select_soundpack(item.id.clone()),
+            div { class: "flex items-center justify-between gap-3 ",
+                div { class: "flex-shrink-0 w-8 h-8 rounded-box flex items-center justify-center bg-base-100 overflow-hidden relative",
+                    if let Some(icon) = &item.icon {
+                        if !icon.is_empty() {
+                            img {
+                                class: "w-full h-full object-cover bg-blend-multiply",
+                                src: "{icon}",
+                            }
+                        } else {
+                            Music { class: "w-4 h-4 text-primary/50 bg-base-100" }
+                        }
+                    } else {
+                        Music { class: "w-4 h-4 text-primary/50 bg-base-100" }
+                    }
+                    if is_selected {
+                        div { class: "absolute inset-0 bg-base-300/70 flex items-center justify-center ",
+                            Check { class: "text-white w-6 h-6" }
+                        }
+                    }
+                }
+                div { class: "flex-1 min-w-0",
+                    div { class: "text-xs font-medium line-clamp-1 text-base-content",
+                        "{item.name}"
+                    }
+                    div { class: "text-xs font-normal line-clamp-1 text-base-content/50",
+                        if let Some(author) = &item.author {
+                            "by {author}"
+                        } else {
+                            "by N/A"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[derive(Props, Clone, PartialEq)]
+pub struct ClearButtonProps {
+    pub clear_soundpack: Callback<(), ()>,
+}
+
+#[component]
+fn ClearButton(props: ClearButtonProps) -> Element {
+    let clear_soundpack = props.clear_soundpack;
+
+    rsx! {
+        button {
+            class: "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-300 last:border-b-0 h-auto btn-ghost",
+            disabled: false,
+            onclick: move |_| clear_soundpack(()),
+            div { class: "flex items-center justify-between gap-3 ",
+                div { class: "flex-shrink-0 w-8 h-8 rounded-box flex items-center justify-center bg-base-100 overflow-hidden relative",
+                    Music { class: "w-4 h-4 text-primary/50 bg-base-100" }
+                }
+                div { class: "flex-1 min-w-0",
+                    div { class: "text-xs font-medium line-clamp-1 text-base-content",
+                        "- None -"
+                    }
+                    div { class: "text-xs font-normal line-clamp-1 text-base-content/50" }
+                }
+            }
         }
     }
 }
@@ -64,7 +155,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
     });
 
     // Filter soundpacks based on search query and type, then sort by last_modified
-    let filtered_soundpacks = use_memo(move || {
+    let dropdown_items = use_memo(move || {
         let query = search_query().to_lowercase();
         let all_packs = soundpacks(); // Filter by type first
         let type_filtered_packs: Vec<_> = all_packs
@@ -92,8 +183,16 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
         // Sort by name alphabetically
         filtered_packs.sort_by(|a, b| a.name.cmp(&b.name));
 
-        filtered_packs
+        let mut items: Vec<DropDownItem> = filtered_packs
+            .into_iter()
+            .map(|pack| DropDownItem::Soundpack(pack))
+            .collect();
+
+        items.insert(0, DropDownItem::ClearSelection);
+
+        items
     });
+
     let current_soundpack = use_memo(move || {
         soundpacks()
             .into_iter()
@@ -117,59 +216,65 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
             ),
         };
 
-    let select_soundpack = |id: SoundpackRef| {
-        let soundpack_id = id.clone();
-        let audio_ctx = audio_ctx.clone();
-        let update_config = update_config.clone();
+    let audio_ctx = audio_ctx.clone();
+    let update_config = update_config.clone();
+
+    let clear_soundpack = move || {};
+
+    let select_soundpack = move |soundpack_id: SoundpackRef| {
         let soundpack_exists = soundpacks().iter().any(|p| p.id == soundpack_id);
 
-        move |_| {
-            is_open.set(false);
-            search_query.set(String::new());
-            error.set(String::new());
-            if !soundpack_exists {
-                return;
-            }
-            {
-                let soundpack_id = soundpack_id.clone();
-                update_config(Box::new(move |config| {
-                    match soundpack_id.soundpack_type {
-                        SoundpackType::Keyboard => {
-                            config.keyboard_soundpack = soundpack_id.to_string();
-                        }
-                        SoundpackType::Mouse => {
-                            config.mouse_soundpack = soundpack_id.to_string();
-                        }
-                    };
-                }));
-            }
-            {
-                let soundpack_id = soundpack_id.clone();
-                let audio_ctx = audio_ctx.clone();
-                spawn(async move {
-                    is_loading.set(true);
-                    Delay::new(Duration::from_millis(1)).await;
-                    let mut audio_ctx = audio_ctx.lock().unwrap();
-                    let result = load_soundpack_file(&mut audio_ctx, &soundpack_id);
-                    match result {
-                        Ok(_) => {
-                            log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());
-                        }
-                        Err(e) => {
-                            log::error!(
-                                "❌ Failed to load {} soundpack: {}",
-                                soundpack_id.to_string(),
-                                e
-                            );
-                            error.set(format!(
-                                "Failed to load soundpack {}",
-                                soundpack_id.to_string(),
-                            ));
-                        }
+        is_open.set(false);
+        search_query.set(String::new());
+        error.set(String::new());
+
+        if !soundpack_exists {
+            return;
+        }
+
+        if current().is_some_and(|id| id == soundpack_id) {
+            return;
+        }
+
+        {
+            let soundpack_id = soundpack_id.clone();
+            update_config(Box::new(move |config| {
+                match soundpack_id.soundpack_type {
+                    SoundpackType::Keyboard => {
+                        config.keyboard_soundpack = soundpack_id.to_string();
                     }
-                    is_loading.set(false);
-                });
-            }
+                    SoundpackType::Mouse => {
+                        config.mouse_soundpack = soundpack_id.to_string();
+                    }
+                };
+            }));
+        }
+        {
+            let soundpack_id = soundpack_id.clone();
+            let audio_ctx = audio_ctx.clone();
+            spawn(async move {
+                is_loading.set(true);
+                Delay::new(Duration::from_millis(1)).await;
+                let mut audio_ctx = audio_ctx.lock().unwrap();
+                let result = load_soundpack_file(&mut audio_ctx, &soundpack_id);
+                match result {
+                    Ok(_) => {
+                        log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "❌ Failed to load {} soundpack: {}",
+                            soundpack_id.to_string(),
+                            e
+                        );
+                        error.set(format!(
+                            "Failed to load soundpack {}",
+                            soundpack_id.to_string(),
+                        ));
+                    }
+                }
+                is_loading.set(false);
+            });
         }
     };
 
@@ -243,6 +348,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                             "position: absolute; position-anchor: --soundpack-anchor-{:?}; position-area: block-end; width: anchor-size(width); margin-top: 4px;",
                             soundpack_type,
                         ),
+
                         // Search input
                         div { class: "p-3 border-b border-base-200",
                             div { class: "relative",
@@ -259,57 +365,24 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
 
                         // Soundpack list
                         div { class: "overflow-y-auto max-h-50",
-                            if filtered_soundpacks.read().is_empty() {
+                            if dropdown_items.read().is_empty() {
                                 div { class: "p-4 text-center text-base-content/50",
                                     "{not_found_text}"
                                 }
                             } else {
-                                for pack in filtered_soundpacks.read().iter() {
-                                    button {
-                                        key: "{pack.id}",
-                                        class: format!(
-                                            "w-full px-4 rounded-none py-2 text-left btn btn-lg justify-start gap-4 border-b border-base-300 last:border-b-0 h-auto {}",
-                                            if current().is_some_and(|id| id == pack.id) {
-                                                "btn-disabled"
-                                            } else {
-                                                "btn-ghost"
-                                            },
-                                        ),
-                                        disabled: current().is_some_and(|id| id == pack.id),
-                                        onclick: select_soundpack(pack.id.clone()),
-                                        div { class: "flex items-center justify-between gap-3 ",
-                                            div { class: "flex-shrink-0 w-8 h-8 rounded-box flex items-center justify-center bg-base-100 overflow-hidden relative",
-                                                if let Some(icon) = &pack.icon {
-                                                    if !icon.is_empty() {
-                                                        img {
-                                                            class: "w-full h-full object-cover bg-blend-multiply",
-                                                            src: "{icon}",
-                                                        }
-                                                    } else {
-                                                        Music { class: "w-4 h-4 text-primary/50 bg-base-100" }
-                                                    }
-                                                } else {
-                                                    Music { class: "w-4 h-4 text-primary/50 bg-base-100" }
-                                                }
-                                                if current().is_some_and(|id| id == pack.id) {
-                                                    div { class: "absolute inset-0 bg-base-300/70 flex items-center justify-center ",
-                                                        Check { class: "text-white w-6 h-6" }
-                                                    }
-                                                }
+                                for item in dropdown_items.read().iter() {
+                                    match item {
+                                        DropDownItem::Soundpack(pack) => rsx! {
+                                            SoundpackItem {
+                                                key: "{pack.id}",
+                                                item: pack.clone(),
+                                                is_selected: current().is_some_and(|id| id == pack.id),
+                                                select_soundpack: select_soundpack.clone(),
                                             }
-                                            div { class: "flex-1 min-w-0",
-                                                div { class: "text-xs font-medium line-clamp-1 text-base-content",
-                                                    "{pack.name}"
-                                                }
-                                                div { class: "text-xs font-normal line-clamp-1 text-base-content/50",
-                                                    if let Some(author) = &pack.author {
-                                                        "by {author}"
-                                                    } else {
-                                                        "by N/A"
-                                                    }
-                                                }
-                                            }
-                                        }
+                                        },
+                                        DropDownItem::ClearSelection => rsx! {
+                                            ClearButton { key: "{\"clear_selection_key\"}", clear_soundpack }
+                                        },
                                     }
                                 }
                             }
@@ -317,6 +390,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                     }
                 }
             }
+
             // Click outside to close
             if is_open() && has_soundpacks() {
                 div {
