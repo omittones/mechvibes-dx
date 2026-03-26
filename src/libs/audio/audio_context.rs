@@ -105,6 +105,14 @@ impl AudioContext {
         self.mouse.load_mappings(samples, mappings, PackKind::Mouse)
     }
 
+    pub fn clear_keyboard_mappings(&mut self) {
+        self.keyboard.clear_mappings();
+    }
+
+    pub fn clear_mouse_mappings(&mut self) {
+        self.mouse.clear_mappings();
+    }
+
     pub fn play_key_event_sound(&mut self, key: &str, is_keydown: bool, received_at: Instant) {
         let config = AppConfig::get();
         if !config.enable_sound || !config.enable_keyboard_sound {

@@ -366,6 +366,22 @@ impl SoundChannel {
         Ok(())
     }
 
+    pub(crate) fn clear_mappings(&mut self) {
+        self.samples = None;
+        self.time_map.clear();
+        let old_sinks = self.sinks.len();
+        self.sinks.clear();
+        if old_sinks > 0 {
+            log::info!("🔇 Cleared {} active sinks", old_sinks);
+        }
+        let old_pressed = self.pressed.len();
+        self.pressed.clear();
+        if old_pressed > 0 {
+            log::info!("⌨️ Cleared {} pressed keys", old_pressed);
+        }
+        log::info!("🎹 Cleared keyboard soundpack from memory");
+    }
+
     fn cleanup_sinks(&mut self) {
         self.sinks.retain(|_, sink| !sink.empty());
 

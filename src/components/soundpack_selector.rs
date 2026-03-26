@@ -216,66 +216,97 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
             ),
         };
 
-    let audio_ctx = audio_ctx.clone();
-    let update_config = update_config.clone();
-
-    let clear_soundpack = move || {};
-
-    let select_soundpack = move |soundpack_id: SoundpackRef| {
-        let soundpack_exists = soundpacks().iter().any(|p| p.id == soundpack_id);
-
-        is_open.set(false);
-        search_query.set(String::new());
-        error.set(String::new());
-
-        if !soundpack_exists {
-            return;
-        }
-
-        if current().is_some_and(|id| id == soundpack_id) {
-            return;
-        }
-
-        {
-            let soundpack_id = soundpack_id.clone();
+    let clear_soundpack = {
+        let audio_ctx = audio_ctx.clone();
+        let update_config = update_config.clone();
+        use_callback(move |_| {
             update_config(Box::new(move |config| {
-                match soundpack_id.soundpack_type {
+                match soundpack_type {
                     SoundpackType::Keyboard => {
-                        config.keyboard_soundpack = soundpack_id.to_string();
+                        config.keyboard_soundpack = "".to_string();
                     }
                     SoundpackType::Mouse => {
-                        config.mouse_soundpack = soundpack_id.to_string();
+                        config.mouse_soundpack = "".to_string();
                     }
                 };
             }));
-        }
-        {
-            let soundpack_id = soundpack_id.clone();
-            let audio_ctx = audio_ctx.clone();
-            spawn(async move {
-                is_loading.set(true);
-                Delay::new(Duration::from_millis(1)).await;
+            {
                 let mut audio_ctx = audio_ctx.lock().unwrap();
-                let result = load_soundpack_file(&mut audio_ctx, &soundpack_id);
-                match result {
-                    Ok(_) => {
-                        log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());
+                match soundpack_type {
+                    SoundpackType::Keyboard => {
+                        audio_ctx.clear_keyboard_mappings();
                     }
-                    Err(e) => {
-                        log::error!(
-                            "❌ Failed to load {} soundpack: {}",
-                            soundpack_id.to_string(),
-                            e
-                        );
-                        error.set(format!(
-                            "Failed to load soundpack {}",
-                            soundpack_id.to_string(),
-                        ));
+                    SoundpackType::Mouse => {
+                        audio_ctx.clear_mouse_mappings();
                     }
                 }
-                is_loading.set(false);
-            });
-        }
+            }
+            is_open.set(false);
+            search_query.set(String::new());
+            error.set(String::new());
+        })
+    };
+
+    let select_soundpack = {
+        let audio_ctx = audio_ctx.clone();
+        let update_config = update_config.clone();
+
+        use_callback(move |soundpack_id: SoundpackRef| {
+            let soundpack_exists = soundpacks().iter().any(|p| p.id == soundpack_id);
+
+            is_open.set(false);
+            search_query.set(String::new());
+            error.set(String::new());
+
+            if !soundpack_exists {
+                return;
+            }
+
+            if current().is_some_and(|id| id == soundpack_id) {
+                return;
+            }
+
+            {
+                let soundpack_id = soundpack_id.clone();
+                update_config(Box::new(move |config| {
+                    match soundpack_id.soundpack_type {
+                        SoundpackType::Keyboard => {
+                            config.keyboard_soundpack = soundpack_id.to_string();
+                        }
+                        SoundpackType::Mouse => {
+                            config.mouse_soundpack = soundpack_id.to_string();
+                        }
+                    };
+                }));
+            }
+            {
+                let soundpack_id = soundpack_id.clone();
+                let audio_ctx = audio_ctx.clone();
+                spawn(async move {
+                    is_loading.set(true);
+                    Delay::new(Duration::from_millis(1)).await;
+                    let mut audio_ctx = audio_ctx.lock().unwrap();
+                    let result = load_soundpack_file(&mut audio_ctx, &soundpack_id);
+                    match result {
+                        Ok(_) => {
+                            log::info!("✅ Loaded {} soundpack", soundpack_id.to_string());
+                        }
+                        Err(e) => {
+                            log::error!(
+                                "❌ Failed to load {} soundpack: {}",
+                                soundpack_id.to_string(),
+                                e
+                            );
+                            error.set(format!(
+                                "Failed to load soundpack {}",
+                                soundpack_id.to_string(),
+                            ));
+                        }
+                    }
+                    is_loading.set(false);
+                });
+            }
+        })
     };
 
     rsx! {
@@ -381,7 +412,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                                             }
                                         },
                                         DropDownItem::ClearSelection => rsx! {
-                                            ClearButton { key: "{\"clear_selection_key\"}", clear_soundpack }
+                                            ClearButton { key: "{\"clear_selection_key\"}", clear_soundpack: clear_soundpack }
                                         },
                                     }
                                 }
