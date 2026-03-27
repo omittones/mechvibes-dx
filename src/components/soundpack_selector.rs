@@ -412,7 +412,7 @@ fn SoundpackDropdown(soundpack_type: SoundpackType) -> Element {
                                             }
                                         },
                                         DropDownItem::ClearSelection => rsx! {
-                                            ClearButton { key: "{\"clear_selection_key\"}", clear_soundpack: clear_soundpack }
+                                            ClearButton { key: "{\"clear_selection_key\"}", clear_soundpack }
                                         },
                                     }
                                 }

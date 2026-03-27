@@ -7,9 +7,11 @@ use cpal::StreamError;
 use rodio::{DeviceSinkBuilder, MixerDeviceSink};
 use std::collections::HashMap;
 use std::process;
-use std::sync::{Arc, LazyLock, Mutex};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use std::time::Instant;
 
+pub static AUDIO_CONTEXT_DISCONNECTED: LazyLock<RwLock<bool>> =
+    LazyLock::new(|| RwLock::new(false));
 pub static AUDIO_CONTEXT: LazyLock<Arc<Mutex<AudioContext>>> = LazyLock::new(|| {
     let mut context = AudioContext::new();
 
@@ -61,8 +63,8 @@ impl AudioContext {
         let mixer = sink.mixer().clone();
 
         self._sink = SyncedDeviceSink { _sink: sink };
-        self.keyboard = self.keyboard.replace_mixer(&mixer);
-        self.mouse = self.mouse.replace_mixer(&mixer);
+        self.keyboard = self.keyboard.replace_mixer(mixer.clone());
+        self.mouse = self.mouse.replace_mixer(mixer.clone());
     }
 
     pub fn set_keyboard_volume(&self, volume: f32) {
@@ -114,6 +116,38 @@ impl AudioContext {
         self.mouse.clear_mappings();
     }
 
+    fn reconnect_if_needed(&mut self) {
+        let did_reconnect = match AUDIO_CONTEXT_DISCONNECTED.read() {
+            Ok(is_disconnected) if *is_disconnected => {
+                self.reconnect();
+                true
+            }
+            Err(error) => {
+                log::error!(
+                    "❌ Failed to read from AUDIO_CONTEXT_DISCONNECTED: {}",
+                    error
+                );
+                false
+            }
+            Ok(_) => false,
+        };
+
+        if did_reconnect {
+            log::info!("🔊 Device reconnected successfully");
+            match AUDIO_CONTEXT_DISCONNECTED.write() {
+                Ok(mut flag) => {
+                    *flag = false;
+                }
+                Err(error) => {
+                    log::error!(
+                        "❌ Failed to write to AUDIO_CONTEXT_DISCONNECTED: {}",
+                        error
+                    );
+                }
+            }
+        }
+    }
+
     pub fn play_key_event_sound(&mut self, key: &str, is_keydown: bool, received_at: Instant) {
         let config = AppConfig::get();
         if !config.enable_sound || !config.enable_keyboard_sound {
@@ -124,6 +158,8 @@ impl AudioContext {
             return;
         }
         drop(config);
+
+        self.reconnect_if_needed();
 
         self.keyboard.play_event_sound(
             key,
@@ -145,6 +181,8 @@ impl AudioContext {
             return;
         }
         drop(config);
+
+        self.reconnect_if_needed();
 
         self.mouse.play_event_sound(
             button,
@@ -203,12 +241,18 @@ fn open_device(device_id: Option<String>) -> MixerDeviceSink {
     let sink = match builder
         .with_error_callback(|error| match error {
             StreamError::DeviceNotAvailable | StreamError::StreamInvalidated => {
-                log::warn!("⚠️ Device not available, reconnecting...");
-                let mut ctx = AUDIO_CONTEXT.lock().unwrap();
-                ctx.reconnect();
+                log::warn!("⚠️ Device not available, should reconnect on next event...");
+                match AUDIO_CONTEXT_DISCONNECTED.write() {
+                    Ok(mut flag) => {
+                        *flag = true;
+                    }
+                    Err(error) => {
+                        log::error!("❌ Failed to write to INVALIDATE_AUDIO_CONTEXT: {}", error);
+                    }
+                }
             }
             _ => {
-                log::error!("❌ Error accessing device {:?}", error);
+                log::error!("❌ Error accessing device: {}", error);
                 process::exit(1);
             }
         })
@@ -220,6 +264,8 @@ fn open_device(device_id: Option<String>) -> MixerDeviceSink {
             process::exit(1);
         }
     };
+
+    log::info!("🔊 Device opened successfully");
 
     sink
 }

@@ -176,13 +176,9 @@ pub fn SettingsPage() -> Element {
                     group_name: "setting-accordion".to_string(),
                     content_class: "collapse-content text-sm",
                     children: rsx! {
-                        div { class: "space-y-2",
-                            // Audio Output Device
+                        div {
+                            class: "space-y-2",
                             AudioOutputSelector {}
-                            // Device Information
-                            div { class: "text-xs mt-2 text-base-content font-bold",
-                                "* Restart the application for changes to take effect"
-                            }
                         }
                     },
                 }
