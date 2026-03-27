@@ -206,6 +206,7 @@ fn open_device(device_id: Option<String>) -> MixerDeviceSink {
                 log::warn!("⚠️ Device not available, reconnecting...");
                 let mut ctx = AUDIO_CONTEXT.lock().unwrap();
                 ctx.reconnect();
+                log::info!("🔊 Device reconnected successfully");
             }
             _ => {
                 log::error!("❌ Error accessing device {:?}", error);
@@ -220,6 +221,8 @@ fn open_device(device_id: Option<String>) -> MixerDeviceSink {
             process::exit(1);
         }
     };
+
+    log::info!("🔊 Device opened successfully");
 
     sink
 }

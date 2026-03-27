@@ -1,3 +1,4 @@
+use crate::libs::audio::audio_context::AUDIO_CONTEXT;
 use crate::libs::device_manager::{DeviceInfo, DeviceManager};
 use crate::libs::input_device_manager::{InputDeviceInfo, InputDeviceManager};
 use crate::utils::config::use_config;
@@ -124,41 +125,50 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
         let device_type = props.device_type;
         let test_device_status = test_device_status.clone();
 
-        use_callback(move |device_id: String| {
-            match device_type {
-                DeviceType::AudioOutput => {
-                    // Test device before selecting
-                    test_device_status.call(device_id.clone());
-
-                    let device_id_clone = device_id.clone();
+        use_callback(move |device_id: String| match device_type {
+            DeviceType::AudioOutput => {
+                test_device_status.call(device_id.clone());
+                {
+                    let device_id = device_id.clone();
                     update_config(Box::new(move |config| {
-                        config.selected_audio_device = if device_id_clone == "default" {
+                        config.selected_audio_device = if device_id == "default" {
                             None
                         } else {
-                            Some(device_id_clone)
+                            Some(device_id)
                         };
                     }));
                 }
-                DeviceType::Keyboard => {
-                    let device_id_clone = device_id.clone();
-                    update_config(Box::new(move |config| {
-                        if config.enabled_keyboards.contains(&device_id_clone) {
-                            config.enabled_keyboards.retain(|id| id != &device_id_clone);
-                        } else {
-                            config.enabled_keyboards.push(device_id_clone);
+                {
+                    let ctx = AUDIO_CONTEXT.lock();
+                    match ctx {
+                        Ok(mut ctx) => {
+                            ctx.reconnect();
                         }
-                    }));
-                }
-                DeviceType::Mouse => {
-                    let device_id_clone = device_id.clone();
-                    update_config(Box::new(move |config| {
-                        if config.enabled_mice.contains(&device_id_clone) {
-                            config.enabled_mice.retain(|id| id != &device_id_clone);
-                        } else {
-                            config.enabled_mice.push(device_id_clone);
+                        Err(e) => {
+                            log::error!("❌ Failed to reconnect audio context: {}", e);
                         }
-                    }));
+                    }
                 }
+            }
+            DeviceType::Keyboard => {
+                let device_id_clone = device_id.clone();
+                update_config(Box::new(move |config| {
+                    if config.enabled_keyboards.contains(&device_id_clone) {
+                        config.enabled_keyboards.retain(|id| id != &device_id_clone);
+                    } else {
+                        config.enabled_keyboards.push(device_id_clone);
+                    }
+                }));
+            }
+            DeviceType::Mouse => {
+                let device_id_clone = device_id.clone();
+                update_config(Box::new(move |config| {
+                    if config.enabled_mice.contains(&device_id_clone) {
+                        config.enabled_mice.retain(|id| id != &device_id_clone);
+                    } else {
+                        config.enabled_mice.push(device_id_clone);
+                    }
+                }));
             }
         })
     };

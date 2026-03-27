@@ -28,7 +28,7 @@ pub fn start_sound_processor(
     // then forwards the event to the UI channel.
     {
         let ctx = audio_ctx.clone();
-        thread::Builder::new()
+        let result = thread::Builder::new()
             .name("sound-keyboard".into())
             .spawn(move || {
                 log::info!("🎹 Keyboard sound processor thread started");
@@ -47,15 +47,21 @@ pub fn start_sound_processor(
                     }
                 }
                 log::info!("🎹 Keyboard sound processor thread exiting");
-            })
-            .expect("Failed to spawn keyboard sound thread");
+            });
+
+        match result {
+            Ok(_) => {}
+            Err(err) => {
+                panic!("❌ Failed to spawn keyboard sound thread: {}", err);
+            }
+        }
     }
 
     // Mouse sound thread — blocks until an event arrives, plays immediately.
     // Nothing to forward since mouse events don't update UI state.
     {
         let ctx = audio_ctx;
-        thread::Builder::new()
+        let result = thread::Builder::new()
             .name("sound-mouse".into())
             .spawn(move || {
                 log::info!("🖱️ Mouse sound processor thread started");
@@ -77,8 +83,14 @@ pub fn start_sound_processor(
                     }
                 }
                 log::info!("🖱️ Mouse sound processor thread exiting");
-            })
-            .expect("Failed to spawn mouse sound thread");
+            });
+
+        match result {
+            Ok(_) => {}
+            Err(err) => {
+                panic!("❌ Failed to spawn keyboard sound thread: {}", err);
+            }
+        }
     }
 
     UiEventChannels {
