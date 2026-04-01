@@ -6,7 +6,6 @@ use std::time::Duration;
 use crate::libs::input_manager::InputEvent;
 use std::time::Instant;
 
-#[cfg(target_os = "linux")]
 pub fn start_evdev_keyboard_listener(
     keyboard_tx: channel::Sender<InputEvent>,
     hotkey_tx: channel::Sender<String>,
@@ -43,10 +42,11 @@ pub fn start_evdev_keyboard_listener(
                 // Set device to non-blocking mode to prevent blocking on idle devices
                 if let Err(e) = device.set_nonblocking(true) {
                     log::error!(
-                        "⚠️ Failed to set non-blocking mode for {:?}: {}",
+                        "❌ Failed to set non-blocking mode for {:?}: {}",
                         path.display(),
                         e
                     );
+                    return;
                 }
 
                 keyboards.push(device);
@@ -68,95 +68,96 @@ pub fn start_evdev_keyboard_listener(
                 // Fetch events (non-blocking)
                 match device.fetch_events() {
                     Ok(events) => {
-                        for event in events {
-                            if event.event_type() == EventType::KEY {
-                                let key_value = event.value();
-                                let key = KeyCode::new(event.code());
-                                let key_code = map_evdev_keycode(key);
-                                if !key_code.is_empty() {
-                                    // Handle key press (value == 1)
-                                    if key_value == 1 {
-                                        // Track modifier keys for hotkey detection
-                                        match key_code {
-                                            "ControlLeft" | "ControlRight" => {
-                                                ctrl_pressed = true;
-                                            }
-                                            "AltLeft" | "AltRight" => {
-                                                alt_pressed = true;
-                                            }
-                                            "KeyM" => {
-                                                // Check for Ctrl+Alt+M hotkey combination
-                                                if ctrl_pressed && alt_pressed {
-                                                    log::info!(
-                                                        "🔥 Hotkey detected: Ctrl+Alt+M - Toggling global sound"
-                                                    );
-                                                    match hotkey_tx.send("TOGGLE_SOUND".to_string())
-                                                    {
-                                                        Ok(()) => log::debug!(
-                                                            "Hotkey event sent successfully"
-                                                        ),
-                                                        Err(e) => log::error!(
-                                                            "Failed to send hotkey event: {}",
-                                                            e
-                                                        ),
-                                                    }
-                                                    continue; // Don't process this as a regular key event
+                        for event in events.filter(|e| e.event_type() == EventType::KEY) {
+                            let key_value = event.value();
+                            let key = KeyCode::new(event.code());
+                            let key_code = map_evdev_keycode(key);
+                            if key_code.is_empty() {
+                                continue;
+                            }
+
+                            // Handle key press (value == 1)
+                            if key_value == 1 {
+                                // Track modifier keys for hotkey detection
+                                match key_code {
+                                    "ControlLeft" | "ControlRight" => {
+                                        ctrl_pressed = true;
+                                    }
+                                    "AltLeft" | "AltRight" => {
+                                        alt_pressed = true;
+                                    }
+                                    "KeyM" => {
+                                        // Check for Ctrl+Alt+M hotkey combination
+                                        if ctrl_pressed && alt_pressed {
+                                            log::info!(
+                                                "🔥 Hotkey detected: Ctrl+Alt+M - Toggling global sound"
+                                            );
+                                            match hotkey_tx.send("TOGGLE_SOUND".to_string()) {
+                                                Ok(()) => {
+                                                    log::debug!("Hotkey event sent successfully")
                                                 }
+                                                Err(e) => log::error!(
+                                                    "Failed to send hotkey event: {}",
+                                                    e
+                                                ),
                                             }
-                                            _ => {}
-                                        }
-
-                                        // Send key press event
-                                        let event = InputEvent {
-                                            code: key_code.to_string(),
-                                            is_down: true,
-                                            received_at: Instant::now(),
-                                        };
-                                        match keyboard_tx.send(event) {
-                                            Ok(()) => {
-                                                log::debug!("Key press detected: {}", key_code)
-                                            }
-                                            Err(e) => log::error!(
-                                                "Failed to send key press '{}': {}",
-                                                key_code,
-                                                e
-                                            ),
+                                            continue; // Don't process this as a regular key event
                                         }
                                     }
-                                    // Handle key release (value == 0)
-                                    else if key_value == 0 {
-                                        // Track modifier key releases for hotkey detection
-                                        match key_code {
-                                            "ControlLeft" | "ControlRight" => {
-                                                ctrl_pressed = false;
-                                            }
-                                            "AltLeft" | "AltRight" => {
-                                                alt_pressed = false;
-                                            }
-                                            _ => {}
-                                        }
-
-                                        // Send key release event
-                                        let event = InputEvent {
-                                            code: key_code.to_string(),
-                                            is_down: false,
-                                            received_at: Instant::now(),
-                                        };
-                                        match keyboard_tx.send(event) {
-                                            Ok(()) => {
-                                                log::debug!("Key release detected: {}", key_code)
-                                            }
-                                            Err(e) => log::error!(
-                                                "Failed to send key release '{}': {}",
-                                                key_code,
-                                                e
-                                            ),
-                                        }
-                                    }
-                                    // Ignore key repeat (value == 2)
-                                } else {
-                                    log::debug!("Ignored unmapped key event: {:?}", key);
+                                    _ => {}
                                 }
+
+                                // Send key press event
+                                let event = InputEvent {
+                                    code: key_code.to_string(),
+                                    is_down: true,
+                                    received_at: Instant::now(),
+                                };
+                                match keyboard_tx.send(event) {
+                                    Ok(()) => {
+                                        log::debug!("Key press detected: {}", key_code)
+                                    }
+                                    Err(e) => log::error!(
+                                        "Failed to send key press '{}': {}",
+                                        key_code,
+                                        e
+                                    ),
+                                }
+                            }
+                            // Handle key release (value == 0)
+                            else if key_value == 0 {
+                                // Track modifier key releases for hotkey detection
+                                match key_code {
+                                    "ControlLeft" | "ControlRight" => {
+                                        ctrl_pressed = false;
+                                    }
+                                    "AltLeft" | "AltRight" => {
+                                        alt_pressed = false;
+                                    }
+                                    _ => {}
+                                }
+
+                                // Send key release event
+                                let event = InputEvent {
+                                    code: key_code.to_string(),
+                                    is_down: false,
+                                    received_at: Instant::now(),
+                                };
+                                match keyboard_tx.send(event) {
+                                    Ok(()) => {
+                                        log::debug!("Key release detected: {}", key_code)
+                                    }
+                                    Err(e) => log::error!(
+                                        "Failed to send key release '{}': {}",
+                                        key_code,
+                                        e
+                                    ),
+                                }
+                            } else if key_value == 2 {
+                                // Ignore key repeat (value == 2)
+                                continue;
+                            } else {
+                                log::warn!("Unexpected key_value: {}", key_value);
                             }
                         }
                     }
@@ -164,7 +165,8 @@ pub fn start_evdev_keyboard_listener(
                         // No events available, this is normal
                     }
                     Err(e) => {
-                        log::error!("⚠️Error fetching events: {}", e);
+                        log::error!("❌ Error fetching events: {}", e);
+                        return;
                     }
                 }
             }
@@ -175,7 +177,6 @@ pub fn start_evdev_keyboard_listener(
     });
 }
 
-#[cfg(target_os = "linux")]
 fn map_evdev_keycode(key: evdev::KeyCode) -> &'static str {
     use evdev::KeyCode;
 
@@ -276,6 +277,18 @@ fn map_evdev_keycode(key: evdev::KeyCode) -> &'static str {
         KeyCode::KEY_COMMA => "Comma",
         KeyCode::KEY_DOT => "Period",
         KeyCode::KEY_SLASH => "Slash",
+
+        // ignore touchpad keys for keyboard
+        KeyCode::BTN_TOUCH
+        | KeyCode::BTN_TOOL_FINGER
+        | KeyCode::BTN_LEFT
+        | KeyCode::BTN_RIGHT
+        | KeyCode::BTN_MIDDLE
+        | KeyCode::BTN_SIDE
+        | KeyCode::BTN_EXTRA
+        | KeyCode::BTN_FORWARD
+        | KeyCode::BTN_BACK
+        | KeyCode::BTN_TASK => "",
 
         _ => {
             log::debug!("⚠️ Ignored unmapped key event (evdev listener): {:?}", key);
