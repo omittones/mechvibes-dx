@@ -1,5 +1,6 @@
 /// Global input manager to handle input channels between main and UI
 use crossbeam_channel as channel;
+use std::fmt::{Display, Error, Formatter};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
@@ -10,6 +11,17 @@ pub struct InputEvent {
     pub is_down: bool,
     /// Monotonic time when the listener sent this event into the channel.
     pub received_at: Instant,
+}
+
+impl Display for InputEvent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(
+            f,
+            "{}:{}",
+            self.code,
+            if self.is_down { "DOWN" } else { "UP" }
+        )
+    }
 }
 
 /// Static global holder for input channels

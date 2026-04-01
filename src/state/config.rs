@@ -122,7 +122,7 @@ impl AppConfig {
     pub fn get() -> RwLockReadGuard<'static, Self> {
         log::debug!("🔍 Getting app config");
         match GLOBAL_APP_CONFIG.read() {
-            Ok(guard) => guard,
+            Ok(config) => config,
             Err(e) => {
                 log::error!("Failed to read app config: {}", e);
                 panic!("Failed to read app config");
@@ -133,10 +133,10 @@ impl AppConfig {
     pub fn update(updater: impl FnOnce(&mut Self)) {
         log::debug!("🔍 Updating app config");
         match GLOBAL_APP_CONFIG.write() {
-            Ok(mut guard) => {
-                updater(&mut guard);
-                guard.last_updated = chrono::Utc::now();
-                match guard.save() {
+            Ok(mut config) => {
+                updater(&mut config);
+                config.last_updated = chrono::Utc::now();
+                match config.save() {
                     Ok(_) => log::debug!("🔄 App config updated"),
                     Err(e) => log::error!("❌ Failed to save app config: {}", e),
                 }

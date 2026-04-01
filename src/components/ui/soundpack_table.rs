@@ -1,3 +1,4 @@
+use crate::libs::AudioContext;
 use crate::libs::audio::load_soundpack_from_config;
 use crate::libs::soundpack::cache::SoundpackMetadata;
 use crate::libs::soundpack::cache::SoundpackRef;
@@ -7,6 +8,7 @@ use dioxus::document::eval;
 use dioxus::prelude::*;
 use lucide_dioxus::{FolderOpen, Music, Plus, RefreshCw, Trash};
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use super::ConfirmDeleteModal;
 
@@ -72,7 +74,7 @@ pub fn SoundpackTable(
     // Refresh state
     let refreshing_soundpacks = use_signal(|| false);
     let state_trigger = use_state_trigger();
-    let audio_ctx: Arc<crate::libs::audio::AudioContext> = use_context();
+    let audio_ctx: Arc<Mutex<AudioContext>> = use_context();
 
     // Filter soundpacks based on search query - computed every render to be reactive to props changes
     let query = search_query().to_lowercase();
@@ -117,8 +119,11 @@ pub fn SoundpackTable(
                 refreshing_soundpacks.set(true);
                 log::debug!("🔄 Refreshing soundpack cache...");
 
-                // Reload soundpacks in audio context
-                let _ = load_soundpack_from_config(&audio_ctx, true);
+                {
+                    // Reload soundpacks in audio context
+                    let mut audio_ctx = audio_ctx.lock().unwrap();
+                    let _ = load_soundpack_from_config(&mut audio_ctx, true);
+                }
 
                 // Trigger state update to refresh UI
                 state_trigger.call(());

@@ -9,7 +9,7 @@ use crate::state::config::AppConfig;
 /// If a soundpack fails to load, clear its selection and optionally save config.
 /// Returns Ok(()) if succeeded, Err if any selected soundpack fails to load (after clear/reset).
 pub fn load_soundpack_from_config(
-    audio_ctx: &AudioContext,
+    audio_ctx: &mut AudioContext,
     update_config: bool,
 ) -> Result<(), String> {
     let mut last_err: Option<String> = None;
@@ -89,7 +89,7 @@ pub fn load_soundpack_from_config(
     }
 }
 
-pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<(), String> {
+pub fn load_soundpack_file(context: &mut AudioContext, id: &SoundpackRef) -> Result<(), String> {
     log::info!("📂 Direct loading soundpack: {}", id);
 
     // Load soundpack directly from filesystem
@@ -103,11 +103,11 @@ pub fn load_soundpack_file(context: &AudioContext, id: &SoundpackRef) -> Result<
     match id.soundpack_type {
         SoundpackType::Mouse => {
             let mouse_mappings = create_mouse_mappings(&soundpack, &samples.0); // Update audio context with mouse data
-            context.update_mouse_context(samples, mouse_mappings)?;
+            context.load_mouse_mappings(samples, mouse_mappings)?;
         }
         SoundpackType::Keyboard => {
             let key_mappings = create_key_mappings(&soundpack, &samples.0); // Update audio context with keyboard data
-            context.update_keyboard_context(samples, key_mappings)?;
+            context.load_keyboard_mappings(samples, key_mappings)?;
         }
     }
 

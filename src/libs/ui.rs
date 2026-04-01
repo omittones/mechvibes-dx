@@ -1,6 +1,6 @@
 use crate::components::header::Header;
 use crate::components::window_controller::WindowController;
-use crate::libs::AudioContext;
+use crate::libs::audio::audio_context::AUDIO_CONTEXT;
 use crate::libs::audio::{load_soundpack_from_config, start_sound_processor};
 use crate::libs::input_manager::{get_input_channels, set_window_focus};
 use crate::libs::routes::Route;
@@ -14,7 +14,6 @@ use dioxus::desktop::RequestAsyncResponder;
 use dioxus::desktop::tao::event::Event as TaoEvent;
 use dioxus::desktop::{use_asset_handler, use_wry_event_handler, wry::http::Response};
 use dioxus::prelude::*;
-use std::sync::Arc;
 
 pub fn app() -> Element {
     // Loading state to prevent FOUC
@@ -39,17 +38,14 @@ pub fn app() -> Element {
     // Provide the keyboard state context to all child components
     use_context_provider(|| keyboard_state);
 
-    // Initialize the audio system for mechvibes sounds - moved here to be accessible by both keyboard processing and UI
-    let audio_context = use_hook(|| Arc::new(AudioContext::new()));
-
     // Provide audio context to all child components (this will be used by Layout and other components)
-    use_context_provider(|| audio_context.clone());
+    use_context_provider(|| AUDIO_CONTEXT.clone());
     {
         // Load current soundpacks on startup
-        let ctx = audio_context.clone();
         use_effect(move || {
             log::debug!("🎵 Loading current soundpacks on startup...");
-            let _ = load_soundpack_from_config(&ctx, true);
+            let mut ctx = AUDIO_CONTEXT.lock().unwrap();
+            let _ = load_soundpack_from_config(&mut ctx, true);
         });
     }
 
@@ -70,6 +66,21 @@ pub fn app() -> Element {
         });
     });
 
+    let input_channels = get_input_channels();
+    let hotkey_rx = &input_channels.hotkey_rx;
+
+    // ===== SOUND PROCESSOR (UI-independent threads) =====
+    // Spawn dedicated threads that do blocking recv() on the input channels and
+    // play sounds immediately, decoupled from the Dioxus async runtime.
+    // Keyboard events are forwarded to ui_channels for UI state updates only.
+    let ui_channels = use_hook(|| {
+        start_sound_processor(
+            AUDIO_CONTEXT.clone(),
+            input_channels.keyboard_rx.clone(),
+            input_channels.mouse_rx.clone(),
+        )
+    });
+
     // ===== WINDOW FOCUS TRACKING =====
     {
         use dioxus::desktop::tao::event::WindowEvent;
@@ -86,21 +97,6 @@ pub fn app() -> Element {
             }
         });
     }
-
-    let input_channels = get_input_channels();
-    let hotkey_rx = &input_channels.hotkey_rx;
-
-    // ===== SOUND PROCESSOR (UI-independent threads) =====
-    // Spawn dedicated threads that do blocking recv() on the input channels and
-    // play sounds immediately, decoupled from the Dioxus async runtime.
-    // Keyboard events are forwarded to ui_channels for UI state updates only.
-    let ui_channels = use_hook(|| {
-        start_sound_processor(
-            audio_context.clone(),
-            input_channels.keyboard_rx.clone(),
-            input_channels.mouse_rx.clone(),
-        )
-    });
 
     // Update keyboard UI state from events forwarded by the sound processor.
     // Sound has already been played on the dedicated thread by this point.

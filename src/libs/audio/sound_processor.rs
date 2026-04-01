@@ -1,5 +1,5 @@
 use crossbeam_channel as channel;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use super::audio_context::AudioContext;
@@ -18,7 +18,7 @@ pub struct UiEventChannels {
 /// still update `KeyboardState`. Mouse events have no UI representation, so
 /// they are consumed entirely on the sound thread.
 pub fn start_sound_processor(
-    audio_ctx: Arc<AudioContext>,
+    audio_ctx: Arc<Mutex<AudioContext>>,
     keyboard_rx: channel::Receiver<InputEvent>,
     mouse_rx: channel::Receiver<InputEvent>,
 ) -> UiEventChannels {
@@ -28,43 +28,69 @@ pub fn start_sound_processor(
     // then forwards the event to the UI channel.
     {
         let ctx = audio_ctx.clone();
-        thread::Builder::new()
+        let result = thread::Builder::new()
             .name("sound-keyboard".into())
             .spawn(move || {
                 log::info!("🎹 Keyboard sound processor thread started");
                 loop {
                     match keyboard_rx.recv() {
                         Ok(event) => {
+                            log::debug!("🎹 Playing keyboard event: {}", event);
+                            let mut ctx = ctx.lock().unwrap();
                             ctx.play_key_event_sound(&event.code, event.is_down, event.received_at);
                             let _ = ui_keyboard_tx.send(event);
                         }
-                        Err(_) => break,
+                        Err(err) => {
+                            log::error!("❌ Keyboard sound processor thread error: {}", err);
+                            break;
+                        }
                     }
                 }
                 log::info!("🎹 Keyboard sound processor thread exiting");
-            })
-            .expect("failed to spawn keyboard sound thread");
+            });
+
+        match result {
+            Ok(_) => {}
+            Err(err) => {
+                panic!("❌ Failed to spawn keyboard sound thread: {}", err);
+            }
+        }
     }
 
     // Mouse sound thread — blocks until an event arrives, plays immediately.
     // Nothing to forward since mouse events don't update UI state.
     {
         let ctx = audio_ctx;
-        thread::Builder::new()
+        let result = thread::Builder::new()
             .name("sound-mouse".into())
             .spawn(move || {
                 log::info!("🖱️ Mouse sound processor thread started");
                 loop {
                     match mouse_rx.recv() {
                         Ok(event) => {
-                            ctx.play_mouse_event_sound(&event.code, event.is_down, event.received_at);
+                            log::debug!("🖱️ Playing mouse event: {}", event);
+                            let mut ctx = ctx.lock().unwrap();
+                            ctx.play_mouse_event_sound(
+                                &event.code,
+                                event.is_down,
+                                event.received_at,
+                            );
                         }
-                        Err(_) => break,
+                        Err(err) => {
+                            log::error!("❌ Mouse sound processor thread error: {}", err);
+                            break;
+                        }
                     }
                 }
                 log::info!("🖱️ Mouse sound processor thread exiting");
-            })
-            .expect("failed to spawn mouse sound thread");
+            });
+
+        match result {
+            Ok(_) => {}
+            Err(err) => {
+                panic!("❌ Failed to spawn keyboard sound thread: {}", err);
+            }
+        }
     }
 
     UiEventChannels {

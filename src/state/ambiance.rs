@@ -1,14 +1,13 @@
 use crate::state::config::AppConfig;
-use rodio::{Decoder, Sink, Source};
+use rodio::{Decoder, DeviceSinkBuilder, Player, Source};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::BufReader;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 // Simple global state for playing sounds
-static GLOBAL_AMBIANCE_SINKS: std::sync::OnceLock<Arc<Mutex<HashMap<String, Sink>>>> =
+static GLOBAL_AMBIANCE_SINKS: std::sync::OnceLock<Arc<Mutex<HashMap<String, Player>>>> =
     std::sync::OnceLock::new();
 
 // Global ambiance player state
@@ -69,11 +68,12 @@ pub fn play_ambiance_sound(sound_id: String, audio_url: String, volume: f32) -> 
     // Create new audio stream for this sound
     thread::spawn(move || {
         let result = (|| -> Result<(), String> {
-            let (_stream, stream_handle) = rodio::OutputStream::try_default()
+            let mut device_sink = DeviceSinkBuilder::open_default_sink()
                 .map_err(|e| format!("Failed to create audio output stream: {}", e))?;
+            device_sink.log_on_drop(false);
+            let mixer = device_sink.mixer();
 
-            let sink = Sink::try_new(&stream_handle)
-                .map_err(|e| format!("Failed to create audio sink: {}", e))?;
+            let sink = Player::connect_new(mixer);
 
             // Load audio file from local path
             let audio_path = audio_url.replace("assets/", "");
@@ -81,13 +81,15 @@ pub fn play_ambiance_sound(sound_id: String, audio_url: String, volume: f32) -> 
 
             let file = File::open(&full_path)
                 .map_err(|e| format!("Failed to open audio file {}: {}", full_path, e))?;
-            let buf_reader = BufReader::new(file);
 
-            let decoder =
-                Decoder::new(buf_reader).map_err(|e| format!("Failed to decode audio: {}", e))?;
+            let decoder = Decoder::try_from(file)
+                .map_err(|e| format!("Failed to decode audio: {}", e))?;
 
             sink.set_volume(volume.clamp(0.0, 1.0));
             sink.append(decoder.repeat_infinite());
+
+            // Keep the OS sink alive for the lifetime of this thread
+            let _keep_sink_alive = device_sink;
 
             // Store sink in global map
             if let Some(sinks_ref) = GLOBAL_AMBIANCE_SINKS.get() {

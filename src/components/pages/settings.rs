@@ -176,13 +176,9 @@ pub fn SettingsPage() -> Element {
                     group_name: "setting-accordion".to_string(),
                     content_class: "collapse-content text-sm",
                     children: rsx! {
-                        div { class: "space-y-2",
-                            // Audio Output Device
+                        div {
+                            class: "space-y-2",
                             AudioOutputSelector {}
-                            // Device Information
-                            div { class: "text-xs mt-2 text-base-content font-bold",
-                                "* Restart the application for changes to take effect"
-                            }
                         }
                     },
                 }
@@ -216,6 +212,12 @@ pub fn SettingsPage() -> Element {
                                                     Ok(info) => {
                                                         update_info.set(Some(info.clone()));
 
+                    // Display update status
+                    // Check if there's a saved update in config even if not in current state
+
+
+
+
                                                         let info_clone = info.clone();
                                                         update_config(
                                                             Box::new(move |config| {
@@ -224,7 +226,7 @@ pub fn SettingsPage() -> Element {
                                                                         info_clone.latest_version.clone(),
                                                                     );
                                                                     config.auto_update.available_download_url = info_clone
-                                                                    .download_url
+                                                                        .download_url
                                                                         .clone();
                                                                 } else {
                                                                     config.auto_update.available_version = None;
@@ -232,12 +234,12 @@ pub fn SettingsPage() -> Element {
                                                                 }
                                                                 config.auto_update.last_check = Some(
                                                                     std::time::SystemTime::now()
-                                                                    .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                                                                        .duration_since(std::time::SystemTime::UNIX_EPOCH)
                                                                         .unwrap_or_default()
                                                                         .as_secs(),
-                                                                    );
-                                                                }),
-                                                            );
+                                                                );
+                                                            }),
+                                                        );
 
                                                         if info.update_available {
                                                             update_info_setter.call(Some(info));
@@ -247,7 +249,8 @@ pub fn SettingsPage() -> Element {
                                                         check_error.set(None);
                                                     }
                                                     Err(e) => {
-                                                        check_error.set(Some(format!("Failed to check for updates: {}", e)));
+                                                        check_error
+                                                            .set(Some(format!("Failed to check for updates: {}", e)));
                                                         update_info.set(None);
                                                         update_info_setter.call(None);
                                                     }
@@ -273,7 +276,6 @@ pub fn SettingsPage() -> Element {
                                     div { class: "text-xs text-base-content/60", "Never checked" }
                                 }
                             }
-                            // Display update status
                             if let Some(error) = check_error() {
                                 div { class: "alert alert-error text-sm", "❌ {error}" }
                             } else if let Some(info) = update_info() {
@@ -308,7 +310,6 @@ pub fn SettingsPage() -> Element {
                                     }
                                 }
                             } else {
-                                // Check if there's a saved update in config even if not in current state
                                 if let Some(available_version) = &auto_update_config().available_version {
                                     div { class: "alert alert-success text-sm",
                                         div {

@@ -188,7 +188,7 @@ impl InputDeviceManager {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(not(windows))]    
     fn add_default_devices(&mut self) {
         // Add default keyboard and mouse for non-Windows platforms
         self.devices.insert(

@@ -6,7 +6,6 @@ use crate::{
 use dioxus::document::eval;
 use dioxus::prelude::*;
 use lucide_dioxus::{Keyboard, Mouse, Music, Settings2};
-use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TabType {
@@ -47,9 +46,6 @@ pub fn Soundpacks() -> Element {
         keyboard_soundpacks.len(),
         mouse_soundpacks.len()
     );
-
-    // Get access to audio context for reloading soundpacks
-    let audio_ctx: Arc<crate::libs::audio::AudioContext> = use_context();
 
     rsx! {
         div { class: "",
@@ -133,10 +129,11 @@ pub fn Soundpacks() -> Element {
                         }),
                     }
                 }
-            } // Import modal
+            }
+
+            // Import modal
             SoundpackImportModal {
                 modal_id: "soundpack_import_modal".to_string(),
-                audio_ctx,
                 target_soundpack_type: match current_tab() {
                     TabType::Keyboard => Some(SoundpackType::Keyboard),
                     TabType::Mouse => Some(SoundpackType::Mouse),
