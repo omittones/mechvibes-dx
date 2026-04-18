@@ -1,4 +1,4 @@
-#![windows_subsystem = "console"]
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 #![allow(non_snake_case)]
 
 mod components;
@@ -17,6 +17,72 @@ use std::sync::mpsc;
 use utils::constants::APP_NAME;
 
 use crate::state::config::AppConfig;
+
+/// When the app is built with the Windows GUI subsystem, stdout/stderr often start as
+/// invalid handles. Attach or allocate a console, then wire stdio to `CONOUT$` so Rust's
+/// logging and `env_logger` actually reach the terminal.
+#[cfg(windows)]
+fn attach_console_for_logging() {
+    use std::fs::OpenOptions;
+    use std::mem;
+    use std::os::windows::io::AsRawHandle;
+    use winapi::shared::minwindef::FALSE;
+    use winapi::um::consoleapi::AllocConsole;
+    use winapi::um::processenv::SetStdHandle;
+    use winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
+    use winapi::um::wincon::{ATTACH_PARENT_PROCESS, AttachConsole};
+
+    unsafe {
+        if AttachConsole(ATTACH_PARENT_PROCESS) == FALSE {
+            let _ = AllocConsole();
+        }
+    }
+
+    let stdout = OpenOptions::new().write(true).open(r"\\.\CONOUT$");
+    let stderr = OpenOptions::new().write(true).open(r"\\.\CONOUT$");
+    if let (Ok(out), Ok(err)) = (stdout, stderr) {
+        unsafe {
+            SetStdHandle(STD_OUTPUT_HANDLE, out.as_raw_handle() as _);
+            SetStdHandle(STD_ERROR_HANDLE, err.as_raw_handle() as _);
+        }
+        mem::forget(out);
+        mem::forget(err);
+    }
+
+    enable_windows_console_unicode_and_vt();
+}
+
+/// UTF-8 so emoji render; VT processing so `env_logger` ANSI color escapes show up in classic conhost.
+#[cfg(windows)]
+fn enable_windows_console_unicode_and_vt() {
+    use winapi::shared::minwindef::FALSE;
+    use winapi::um::consoleapi::{GetConsoleMode, SetConsoleMode};
+    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::{STD_ERROR_HANDLE, STD_OUTPUT_HANDLE};
+    use winapi::um::wincon::{
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING, SetConsoleCP, SetConsoleOutputCP,
+    };
+
+    const CP_UTF8: winapi::shared::minwindef::UINT = 65001;
+
+    unsafe {
+        let _ = SetConsoleCP(CP_UTF8);
+        let _ = SetConsoleOutputCP(CP_UTF8);
+
+        for &std_id in &[STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+            let h = GetStdHandle(std_id);
+            if h.is_null() || h == INVALID_HANDLE_VALUE {
+                continue;
+            }
+            let mut mode = 0u32;
+            if GetConsoleMode(h, &mut mode) != FALSE {
+                mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+                let _ = SetConsoleMode(h, mode);
+            }
+        }
+    }
+}
 
 // Use .ico format for better Windows compatibility
 const EMBEDDED_ICON: &[u8] = include_bytes!("../assets/icon.ico");
@@ -79,8 +145,34 @@ fn load_icon() -> Option<dioxus::desktop::tao::window::Icon> {
     }
 }
 
+fn setup_logging(console_mode: bool) {
+    // Without RUST_LOG, env_logger is quiet except errors; `--console` implies info-level startup
+    // logs. RUST_LOG still wins when set.
+    let log_env = if console_mode {
+        env_logger::Env::default().default_filter_or("info")
+    } else {
+        env_logger::Env::default()
+    };
+    let mut log_builder = env_logger::Builder::from_env(log_env);
+    #[cfg(windows)]
+    if console_mode {
+        // Redirected CONOUT$ is not a tty; env_logger skips ANSI unless we force color output.
+        log_builder.write_style(env_logger::fmt::WriteStyle::Always);
+    }
+    log_builder.init();
+}
+
 fn main() {
-    env_logger::init();
+    let raw_args: Vec<String> = std::env::args().collect();
+    let console_mode = raw_args.iter().any(|a| a == "--console");
+    let args: Vec<String> = raw_args.into_iter().filter(|a| a != "--console").collect();
+
+    #[cfg(windows)]
+    if console_mode {
+        attach_console_for_logging();
+    }
+
+    setup_logging(console_mode);
 
     log::info!("🚀 Initializing {}...", APP_NAME);
 
@@ -92,8 +184,6 @@ fn main() {
         log::warn!("⚠️ Failed to create soundpack directories: {}", e);
     }
 
-    // Check for command line arguments (protocol handling and startup options)
-    let args: Vec<String> = std::env::args().collect();
     log::debug!("🔍 Command line args: {:?}", args);
 
     // Check if we should start minimized (from auto-startup)

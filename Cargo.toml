@@ -50,6 +50,10 @@ evdev = "0.13"
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
 winapi = { version = "0.3", features = [
+  "consoleapi",
+  "handleapi",
+  "processenv",
+  "winbase",
   "wincon",
   "winuser",
   "hidusage",
