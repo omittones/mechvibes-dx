@@ -46,7 +46,7 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
         let mut error_message = error_message.clone();
         let device_type = props.device_type;
 
-        use_callback(move |_| {
+        use_callback(move |reconnect_audio: bool| {
             spawn(async move {
                 is_loading.set(true);
                 error_message.set(String::new());
@@ -60,6 +60,12 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                             }
                             Err(e) => {
                                 error_message.set(format!("Failed to load audio devices: {}", e));
+                            }
+                        }
+                        if reconnect_audio {
+                            log::info!("🔊 Audio device list refreshed; reconnecting output");
+                            if let Ok(mut ctx) = AUDIO_CONTEXT.lock() {
+                                ctx.reconnect();
                             }
                         }
                     }
@@ -86,9 +92,9 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
         })
     };
 
-    // Load devices on mount
+    // Load devices on mount (no audio reconnect — context is already open for current device)
     use_effect(move || {
-        load_devices.call(());
+        load_devices.call(false);
     });
 
     // Test device status (only for audio devices)
@@ -296,7 +302,7 @@ pub fn DeviceSelector(props: DeviceSelectorProps) -> Element {
                 span { "{props.label}" }
                 button {
                     class: "btn btn-ghost btn-xs",
-                    onclick: move |_| load_devices.call(()),
+                    onclick: move |_| load_devices.call(true),
                     disabled: is_loading(),
                     title: "Refresh device list",
                     if is_loading() {

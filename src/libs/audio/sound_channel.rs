@@ -35,9 +35,9 @@ impl SoundChannel {
         }
     }
 
-    pub fn replace_mixer(&self, mixer: &Mixer) -> Self {
+    pub fn replace_mixer(&self, mixer: Mixer) -> Self {
         Self {
-            mixer: mixer.clone(),
+            mixer: mixer,
             max_voices: self.max_voices,
             samples: self.samples.clone(),
             time_map: self.time_map.clone(),
