@@ -1,0 +1,43 @@
+[package]
+name = "mechvibes-desktop"
+version = "0.4.0"
+edition = "2024"
+
+[dependencies]
+mechvibes-core = { path = "../mechvibes-core" }
+
+chrono = { workspace = true }
+crossbeam-channel = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+once_cell = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+
+dioxus = { version = "0.7.2", features = ["router"] }
+lucide-dioxus = { version = "2.45.0", features = ["all-icons"] }
+tray-icon = "0.14"
+image = "0.24"
+rfd = "0.17.2"
+open = "5.3.0"
+futures-timer = "3.0.3"
+reqwest = { version = "0.12", features = ["json"] }
+semver = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = [
+    "consoleapi",
+    "handleapi",
+    "processenv",
+    "winbase",
+    "wincon",
+] }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+[features]
+default = ["dioxus/desktop", "auto-update"]
+desktop = ["dioxus/desktop"]
+auto-update = []

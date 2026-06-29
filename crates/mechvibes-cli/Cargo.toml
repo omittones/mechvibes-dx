@@ -1,0 +1,17 @@
+[package]
+name = "mechvibes-cli"
+version = "0.4.0"
+edition = "2024"
+
+[[bin]]
+name = "mechvibes-cli"
+path = "src/main.rs"
+
+[dependencies]
+mechvibes-core = { path = "../mechvibes-core" }
+
+crossbeam-channel = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
+tokio = { workspace = true }
+ctrlc = { version = "3", features = ["termination"] }
