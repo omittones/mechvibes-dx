@@ -1,87 +1,158 @@
-use crossbeam_channel as channel;
-use mechvibes_core::input_manager::{InputEvent, init_input_channels, init_window_focus_state_with_value};
-use mechvibes_core::start_listeners;
-use mechvibes_core::state::config::AppConfig;
-use mechvibes_core::utils::constants::APP_NAME;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+#![allow(non_snake_case)]
 
-fn setup_logging() {
-    let log_env = env_logger::Env::default().default_filter_or("info");
-    env_logger::Builder::from_env(log_env).init();
+mod daemon;
+mod devices;
+mod ipc;
+mod packs;
+mod tray;
+
+use clap::{Parser, Subcommand};
+use ipc::{IpcCommand, IpcResponse, send_command};
+use mechvibes_core::state::config::AppConfig;
+
+#[derive(Parser)]
+#[command(name = "mechvibes-cli", about = "MechvibesDX headless daemon and control tool")]
+struct Cli {
+    /// Enable log output
+    #[arg(long, global = true)]
+    log: bool,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Stop the running daemon
+    Stop,
+
+    /// Show daemon status and current config
+    Status,
+
+    /// Manage soundpacks
+    Packs {
+        #[command(subcommand)]
+        cmd: PacksCommand,
+    },
+
+    /// Set master volume (0–100)
+    SetVolume {
+        volume: f32,
+    },
+
+    /// Toggle mute
+    Mute,
+
+    /// Manage audio output devices
+    Devices {
+        #[command(subcommand)]
+        cmd: DevicesCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum DevicesCommand {
+    /// List available audio output devices
+    List,
+    /// Set the active audio output device by ID (use 'default' for system default)
+    Set {
+        /// Device ID from `devices list` (e.g. output_0) or 'default'
+        id: String,
+    },
+    /// Force reconnect to the current audio output device
+    Reconnect,
+}
+
+#[derive(Subcommand)]
+enum PacksCommand {
+    /// List available soundpacks
+    List {
+        #[arg(long, help = "List keyboard soundpacks")]
+        keyboard: bool,
+        #[arg(long, help = "List mouse soundpacks")]
+        mouse: bool,
+    },
+    /// Set the active soundpack by its full ID (e.g. builtin/keyboard/cherrymx-blue-abs)
+    Set {
+        /// Full soundpack ID from `packs list`
+        id: String,
+    },
+}
+
+fn setup_logging(enabled: bool) {
+    let filter = if enabled { "info" } else { "off" };
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or(filter))
+        .format_timestamp(None)
+        .format_target(false)
+        .init();
 }
 
 fn main() {
-    setup_logging();
+    let cli = Cli::parse();
 
-    log::info!("🚀 {} CLI starting...", APP_NAME);
+    setup_logging(cli.log);
 
-    let _manifest = mechvibes_core::state::manifest::AppManifest::load();
+    match cli.command {
+        None => daemon::run(),
 
-    if let Err(e) = mechvibes_core::state::paths::soundpacks::ensure_soundpack_directories() {
-        log::warn!("⚠️ Failed to create soundpack directories: {}", e);
-    }
+        Some(Command::Stop) => match send_command(IpcCommand::Stop) {
+            Ok(_) => println!("Daemon stopped."),
+            Err(e) => eprintln!("Error: {}", e),
+        },
 
-    mechvibes_core::state::app::init_app_state();
+        Some(Command::Status) => match send_command(IpcCommand::Status) {
+            Ok(IpcResponse::Status {
+                enable_sound,
+                keyboard_soundpack,
+                mouse_soundpack,
+                volume,
+                mouse_volume,
+                ..
+            }) => {
+                println!("Daemon: running");
+                println!("Sound:  {}", if enable_sound { "on" } else { "muted" });
+                println!("Keys:   {}", if keyboard_soundpack.is_empty() { "(none)" } else { &keyboard_soundpack });
+                println!("Mouse:  {}", if mouse_soundpack.is_empty() { "(none)" } else { &mouse_soundpack });
+                println!("Vol:    {:.0}  Mouse vol: {:.0}", volume, mouse_volume);
+            }
+            Ok(_) => println!("Daemon: running"),
+            Err(e) => println!("Daemon: not running ({})", e),
+        },
 
-    {
-        let config = AppConfig::get();
-        log::info!(
-            "🎹 Keyboard soundpack: {}",
-            if config.keyboard_soundpack.is_empty() { "(none)" } else { &config.keyboard_soundpack }
-        );
-        log::info!(
-            "🖱️  Mouse soundpack: {}",
-            if config.mouse_soundpack.is_empty() { "(none)" } else { &config.mouse_soundpack }
-        );
-        log::info!("🔊 Sound enabled: {}", config.enable_sound);
-    }
+        Some(Command::Packs { cmd: PacksCommand::List { keyboard, mouse } }) => {
+            packs::list(keyboard, mouse);
+        }
 
-    // Load audio — AUDIO_CONTEXT is a LazyLock that initializes on first access
-    {
-        let _ctx = mechvibes_core::audio::audio_context::AUDIO_CONTEXT.lock();
-        log::info!("🔊 Audio context initialized");
-    }
+        Some(Command::Packs { cmd: PacksCommand::Set { id } }) => {
+            packs::set(&id);
+        }
 
-    let (keyboard_tx, keyboard_rx) = channel::unbounded::<InputEvent>();
-    let (mouse_tx, mouse_rx) = channel::unbounded::<InputEvent>();
-    let (hotkey_tx, hotkey_rx) = channel::unbounded::<String>();
-
-    // CLI has no window — treat focus as always false so the global (rdev) listener handles all input
-    init_window_focus_state_with_value(false);
-    init_input_channels(keyboard_rx, mouse_rx, hotkey_rx);
-
-    start_listeners(keyboard_tx, mouse_tx, hotkey_tx);
-
-    // Spawn a thread to handle hotkeys (Ctrl+Alt+M toggles sound)
-    std::thread::spawn(move || {
-        let channels = mechvibes_core::input_manager::get_input_channels();
-        loop {
-            match channels.hotkey_rx.recv() {
-                Ok(hotkey) if hotkey == "TOGGLE_SOUND" => {
-                    AppConfig::update(|cfg| {
-                        cfg.enable_sound = !cfg.enable_sound;
-                    });
-                    let enabled = AppConfig::get().enable_sound;
-                    log::info!("🔊 Sound {}", if enabled { "enabled" } else { "muted" });
+        Some(Command::SetVolume { volume }) => {
+            let volume = volume.clamp(0.0, 100.0);
+            match send_command(IpcCommand::SetVolume { volume }) {
+                Ok(_) => println!("Volume set to {:.0}", volume),
+                Err(_) => {
+                    AppConfig::update(|cfg| cfg.volume = volume);
+                    println!("Volume set to {:.0} (saved, no daemon running)", volume);
                 }
-                Ok(_) => {}
-                Err(_) => break,
             }
         }
-    });
 
-    log::info!("✅ {} CLI running — press Ctrl+C to exit", APP_NAME);
+        Some(Command::Mute) => match send_command(IpcCommand::Mute) {
+            Ok(_) => println!("Toggled mute."),
+            Err(e) => eprintln!("Error: {}", e),
+        },
 
-    let running = Arc::new(AtomicBool::new(true));
-    let r = running.clone();
-    ctrlc::set_handler(move || {
-        log::info!("👋 Shutting down...");
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl+C handler");
+        Some(Command::Devices { cmd: DevicesCommand::List }) => {
+            devices::list();
+        }
 
-    while running.load(Ordering::SeqCst) {
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        Some(Command::Devices { cmd: DevicesCommand::Set { id } }) => {
+            devices::set(&id);
+        }
+
+        Some(Command::Devices { cmd: DevicesCommand::Reconnect }) => {
+            devices::reconnect();
+        }
     }
 }
