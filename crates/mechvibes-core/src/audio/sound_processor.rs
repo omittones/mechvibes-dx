@@ -1,9 +1,11 @@
 use crossbeam_channel as channel;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 use super::audio_context::AudioContext;
 use crate::input_manager::InputEvent;
+use crate::stats::{STATS, STALE_THRESHOLD_MS};
 
 /// Channels forwarded to the UI for state updates only (no sound playback).
 #[derive(Clone)]
@@ -33,6 +35,12 @@ pub fn start_sound_processor(
                 loop {
                     match keyboard_rx.recv() {
                         Ok(event) => {
+                            if event.received_at.elapsed().as_millis() as u64 > STALE_THRESHOLD_MS {
+                                log::debug!("🎹 Discarding stale keyboard event: {}", event);
+                                STATS.discarded.fetch_add(1, Ordering::Relaxed);
+                                continue;
+                            }
+                            STATS.keypresses.fetch_add(1, Ordering::Relaxed);
                             log::debug!("🎹 Playing keyboard event: {}", event);
                             let mut ctx = ctx.lock().unwrap();
                             ctx.play_key_event_sound(&event.code, event.is_down, event.received_at);
@@ -64,6 +72,12 @@ pub fn start_sound_processor(
                 loop {
                     match mouse_rx.recv() {
                         Ok(event) => {
+                            if event.received_at.elapsed().as_millis() as u64 > STALE_THRESHOLD_MS {
+                                log::debug!("🖱️ Discarding stale mouse event: {}", event);
+                                STATS.discarded.fetch_add(1, Ordering::Relaxed);
+                                continue;
+                            }
+                            STATS.mouse_presses.fetch_add(1, Ordering::Relaxed);
                             log::debug!("🖱️ Playing mouse event: {}", event);
                             let mut ctx = ctx.lock().unwrap();
                             ctx.play_mouse_event_sound(

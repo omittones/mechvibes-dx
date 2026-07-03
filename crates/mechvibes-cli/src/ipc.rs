@@ -35,6 +35,10 @@ pub enum IpcResponse {
         mouse_soundpack: String,
         volume: f32,
         mouse_volume: f32,
+        keypresses: u64,
+        mouse_presses: u64,
+        avg_latency_ms: f64,
+        discarded: u64,
     },
     Simple {
         ok: bool,
@@ -149,6 +153,7 @@ fn dispatch(cmd: IpcCommand, stop_flag: Arc<AtomicBool>) -> IpcResponse {
 
         IpcCommand::Status => {
             let cfg = AppConfig::get();
+            let stats = &mechvibes_core::stats::STATS;
             IpcResponse::Status {
                 ok: true,
                 enable_sound: cfg.enable_sound,
@@ -156,6 +161,10 @@ fn dispatch(cmd: IpcCommand, stop_flag: Arc<AtomicBool>) -> IpcResponse {
                 mouse_soundpack: cfg.mouse_soundpack.clone(),
                 volume: cfg.volume,
                 mouse_volume: cfg.mouse_volume,
+                keypresses: stats.keypresses.load(std::sync::atomic::Ordering::Relaxed),
+                mouse_presses: stats.mouse_presses.load(std::sync::atomic::Ordering::Relaxed),
+                avg_latency_ms: stats.avg_latency_ms(),
+                discarded: stats.discarded.load(std::sync::atomic::Ordering::Relaxed),
             }
         }
 

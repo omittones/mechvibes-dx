@@ -2,6 +2,7 @@
 
 pub mod audio;
 pub mod device_manager;
+pub mod stats;
 pub mod input_device_manager;
 pub mod input_manager;
 pub mod listeners;

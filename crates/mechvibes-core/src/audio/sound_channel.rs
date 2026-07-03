@@ -213,6 +213,7 @@ impl SoundChannel {
     }
 
     fn log_sound_latency(&self, event: &str, received_at: Instant) {
+        crate::stats::STATS.record_latency(received_at);
         let ms = received_at.elapsed().as_secs_f32() * 1000.0;
         log::debug!("⏱️ Sound '{}' input latency: {:.3} ms", event, ms,);
     }
