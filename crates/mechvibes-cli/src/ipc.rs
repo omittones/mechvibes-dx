@@ -191,7 +191,7 @@ fn dispatch(cmd: IpcCommand, stop_flag: Arc<AtomicBool>) -> IpcResponse {
         }
 
         IpcCommand::SetVolume { volume } => {
-            let volume = volume.clamp(0.0, 100.0);
+            let volume = volume.clamp(0.0, 1.0);
             AppConfig::update(|cfg| cfg.volume = volume);
             log::info!("Volume set to {:.0}", volume);
             IpcResponse::ok()

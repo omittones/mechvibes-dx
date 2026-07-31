@@ -124,7 +124,7 @@ fn main() {
                 println!("Sound:       {}", if enable_sound { "on" } else { "muted" });
                 println!("Keys:        {}", if keyboard_soundpack.is_empty() { "(none)" } else { &keyboard_soundpack });
                 println!("Mouse:       {}", if mouse_soundpack.is_empty() { "(none)" } else { &mouse_soundpack });
-                println!("Vol:         {:.0}  Mouse vol: {:.0}", volume, mouse_volume);
+                println!("Vol:         {:.0}  Mouse vol: {:.0}", volume * 100.0, mouse_volume * 100.0);
                 println!();
                 println!("Key presses: {}", keypresses);
                 println!("Mouse clicks:{}", mouse_presses);
@@ -151,17 +151,18 @@ fn main() {
 
         Some(Command::Volume { cmd: None }) => {
             let cfg = AppConfig::get();
-            println!("Volume: {:.0}", cfg.volume);
-            println!("Mouse volume: {:.0}", cfg.mouse_volume);
+            println!("Volume: {:.0}", cfg.volume * 100.0);
+            println!("Mouse volume: {:.0}", cfg.mouse_volume * 100.0);
         }
 
         Some(Command::Volume { cmd: Some(VolumeCommand::Set { volume }) }) => {
-            let volume = volume.clamp(0.0, 100.0);
-            match send_command(IpcCommand::SetVolume { volume }) {
-                Ok(_) => println!("Volume set to {:.0}", volume),
+            let pct = volume.clamp(0.0, 100.0);
+            let native = pct / 100.0;
+            match send_command(IpcCommand::SetVolume { volume: native }) {
+                Ok(_) => println!("Volume set to {:.0}", pct),
                 Err(_) => {
-                    AppConfig::update(|cfg| cfg.volume = volume);
-                    println!("Volume set to {:.0} (saved, no daemon running)", volume);
+                    AppConfig::update(|cfg| cfg.volume = native);
+                    println!("Volume set to {:.0} (saved, no daemon running)", pct);
                 }
             }
         }
